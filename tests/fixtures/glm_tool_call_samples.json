@@ -1,0 +1,180 @@
+{
+  "_about": "Captured-style GLM-5.2 tool-call wire shapes, one per documented delta, plus the OpenAI shape each should normalize to. Used by test_protocol_deltas.py (detection) and test_adapter_roundtrip.py (transform).",
+  "arg_encoding": {
+    "description": "GLM returns function.arguments as a native JSON object, not a JSON string.",
+    "glm_response": {
+      "id": "chatcmpl-glm-arg-1",
+      "object": "chat.completion",
+      "model": "glm-5.2",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "call_glm_arg_1",
+                "type": "function",
+                "function": {
+                  "name": "read_file",
+                  "arguments": { "path": "src/main.py", "max_lines": 200 }
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ]
+    },
+    "expected_first_call": {
+      "name": "read_file",
+      "arguments": "{\"path\":\"src/main.py\",\"max_lines\":200}"
+    }
+  },
+  "parallel_calls": {
+    "description": "GLM frames two simultaneous calls under a parallel_tool_calls envelope, without per-call id/type scaffolding.",
+    "glm_response": {
+      "id": "chatcmpl-glm-par-1",
+      "object": "chat.completion",
+      "model": "glm-5.2",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "parallel_tool_calls": [
+              {
+                "function": {
+                  "name": "list_dir",
+                  "arguments": { "path": "." }
+                }
+              },
+              {
+                "function": {
+                  "name": "grep",
+                  "arguments": { "pattern": "TODO", "path": "src" }
+                }
+              }
+            ]
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    },
+    "expected_call_names": ["list_dir", "grep"],
+    "expected_finish_reason": "tool_calls"
+  },
+  "reasoning_interleave": {
+    "description": "GLM-5.2 carries a chain-of-thought trace in reasoning_content alongside the tool call.",
+    "glm_response": {
+      "id": "chatcmpl-glm-rea-1",
+      "object": "chat.completion",
+      "model": "glm-5.2",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "I should open the config first.",
+            "reasoning_content": "The user wants the DB url; it lives in config.yaml, so I will read that file.",
+            "tool_calls": [
+              {
+                "id": "call_glm_rea_1",
+                "type": "function",
+                "function": {
+                  "name": "read_file",
+                  "arguments": "{\"path\": \"config.yaml\"}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ]
+    },
+    "expected_content_is_null": true,
+    "expected_reasoning_contains": "config.yaml"
+  },
+  "streaming_assembly": {
+    "description": "A streamed GLM tool call arrives as delta fragments keyed by index whose arguments must be concatenated.",
+    "glm_stream_chunks": [
+      {
+        "id": "chatcmpl-glm-str-1",
+        "object": "chat.completion.chunk",
+        "model": "glm-5.2",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "tool_calls": [
+                {
+                  "index": 0,
+                  "id": "call_glm_str_1",
+                  "type": "function",
+                  "function": { "name": "write_file", "arguments": "" }
+                }
+              ]
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "object": "chat.completion.chunk",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "tool_calls": [
+                { "index": 0, "function": { "arguments": "{\"path\": \"out" } }
+              ]
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "object": "chat.completion.chunk",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "tool_calls": [
+                { "index": 0, "function": { "arguments": ".txt\", \"body\": \"hi\"}" } }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ]
+      }
+    ],
+    "expected_first_call": {
+      "name": "write_file",
+      "arguments": "{\"path\": \"out.txt\", \"body\": \"hi\"}"
+    }
+  },
+  "openai_tool_definitions": {
+    "description": "OpenAI-shaped tool defs a harness sends; denormalize_tools lowers them into GLM's accepted form.",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "description": "Read a file from disk",
+          "parameters": {
+            "type": "object",
+            "properties": { "path": { "type": "string" } },
+            "required": ["path"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": { "name": "noop" }
+      }
+    ]
+  }
+}
