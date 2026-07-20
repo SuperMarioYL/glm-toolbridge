@@ -9,7 +9,7 @@
 <p><sub>把 GLM-5.2 接进任意 OpenAI 格式编码 agent，tool-call 不再静默错配——一层薄协议适配，harness 的 OpenAI 代码路径一行不改。</sub></p>
 
 <p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/SuperMarioYL/glm-toolbridge/releases"><img src="https://img.shields.io/github/v/release/SuperMarioYL/glm-toolbridge" alt="Release"></a>
   <a href="https://github.com/SuperMarioYL/glm-toolbridge/actions/workflows/ci.yml"><img src="https://github.com/SuperMarioYL/glm-toolbridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB.svg" alt="Python">
