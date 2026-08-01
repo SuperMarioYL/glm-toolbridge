@@ -63,6 +63,27 @@ def _coerce_arguments_to_json_string(args: Any, *, name: str | None) -> str:
     )
 
 
+def _coerce_arguments_fragment(args: Any) -> str:
+    """Coerce a streamed tool-call argument FRAGMENT to a string.
+
+    Unlike :func:`_coerce_arguments_to_json_string`, this does NOT validate the
+    fragment as whole JSON: OpenAI streaming contracts deliver ``function.arguments``
+    as *partial* string fragments (e.g. ``'{"path": "out'``) that the harness
+    concatenates and parses itself once complete. Validating each fragment as whole
+    JSON would therefore raise on every valid partial payload. We only guarantee the
+    OpenAI invariant — ``arguments`` is a STRING — without asserting it is parseable.
+    """
+    if args is None:
+        return ""
+    if isinstance(args, str):
+        return args
+    if isinstance(args, (dict, list)):
+        return json.dumps(args, ensure_ascii=False, separators=(",", ":"))
+    # An unexpected scalar type in a fragment — coerce to its repr rather than
+    # crash an otherwise valid stream.
+    return str(args)
+
+
 # --------------------------------------------------------------------------- #
 # Reasoning interleave (delta: reasoning_interleave)                           #
 # --------------------------------------------------------------------------- #
@@ -135,85 +156,158 @@ def assemble_stream(chunks: list[dict[str, Any]]) -> dict[str, Any]:
     fragments carry an ``index`` and incremental ``function.arguments`` strings
     that must be concatenated. The result is a normal response dict (using
     ``message`` rather than ``delta``) ready for :func:`normalize`.
+
+    Multiple choices (``choices`` with differing ``index``) are assembled
+    independently and rebuilt in index order — earlier versions silently dropped
+    every choice beyond ``choices[0]``.
     """
     if not chunks:
         raise StreamAssemblyError("cannot assemble an empty stream")
 
-    calls_by_index: dict[int, dict[str, Any]] = {}
-    content_parts: list[str] = []
-    reasoning_parts: list[str] = []
-    finish_reason: str | None = None
-    role = "assistant"
+    # Per-choice assembled state, keyed by the choice index (default 0 for
+    # chunks that omit it, matching the OpenAI single-choice convention).
+    by_choice: dict[int, dict[str, Any]] = {}
     head = copy.deepcopy(chunks[0])
 
     for chunk in chunks:
         choices = chunk.get("choices") or []
-        if not choices:
-            continue
-        choice = choices[0]
-        if choice.get("finish_reason"):
-            finish_reason = choice["finish_reason"]
-        delta = choice.get("delta") or {}
-        if delta.get("role"):
-            role = delta["role"]
-        if delta.get("content"):
-            content_parts.append(delta["content"])
-        if delta.get("reasoning_content"):
-            reasoning_parts.append(delta["reasoning_content"])
-        for frag in delta.get("tool_calls") or []:
-            idx = frag.get("index")
-            if idx is None:
-                raise StreamAssemblyError(
-                    "streamed tool-call fragment has no index"
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            cidx = choice.get("index", 0)
+            if not isinstance(cidx, int):
+                cidx = 0
+            st = by_choice.setdefault(cidx, {
+                "content_parts": [],
+                "reasoning_parts": [],
+                "calls_by_index": {},
+                "finish_reason": None,
+                "role": "assistant",
+            })
+            if choice.get("finish_reason"):
+                st["finish_reason"] = choice["finish_reason"]
+            delta = choice.get("delta") or {}
+            if delta.get("role"):
+                st["role"] = delta["role"]
+            if delta.get("content"):
+                st["content_parts"].append(delta["content"])
+            if delta.get("reasoning_content"):
+                st["reasoning_parts"].append(delta["reasoning_content"])
+            for frag in delta.get("tool_calls") or []:
+                fidx = frag.get("index") if isinstance(frag, dict) else None
+                if fidx is None:
+                    raise StreamAssemblyError(
+                        "streamed tool-call fragment has no index"
+                    )
+                slot = st["calls_by_index"].setdefault(
+                    fidx,
+                    {"id": None, "type": "function", "function": {"name": None, "arguments": ""}},
                 )
-            slot = calls_by_index.setdefault(
-                idx,
-                {"id": None, "type": "function", "function": {"name": None, "arguments": ""}},
-            )
-            if frag.get("id"):
-                slot["id"] = frag["id"]
-            fn = frag.get("function") or {}
-            if fn.get("name"):
-                slot["function"]["name"] = fn["name"]
-            if fn.get("arguments"):
-                slot["function"]["arguments"] += fn["arguments"]
+                if frag.get("id"):
+                    slot["id"] = frag["id"]
+                fn = frag.get("function") or {}
+                if fn.get("name"):
+                    slot["function"]["name"] = fn["name"]
+                if fn.get("arguments"):
+                    slot["function"]["arguments"] += fn["arguments"]
 
-    # Validate each assembled call has a name and balanced JSON arguments.
-    assembled: list[dict[str, Any]] = []
-    for idx in sorted(calls_by_index):
-        slot = calls_by_index[idx]
-        if not slot["function"]["name"]:
-            raise StreamAssemblyError(
-                f"streamed tool call at index {idx} never received a name"
-            )
-        args = slot["function"]["arguments"] or "{}"
-        try:
-            json.loads(args)
-        except (json.JSONDecodeError, TypeError) as exc:
-            raise StreamAssemblyError(
-                f"streamed tool call at index {idx} ended with unbalanced JSON arguments"
-            ) from exc
-        slot["function"]["arguments"] = args
-        assembled.append(slot)
+    rebuilt_choices: list[dict[str, Any]] = []
+    for cidx in sorted(by_choice):
+        st = by_choice[cidx]
+        assembled: list[dict[str, Any]] = []
+        for fidx in sorted(st["calls_by_index"]):
+            slot = st["calls_by_index"][fidx]
+            if not slot["function"]["name"]:
+                raise StreamAssemblyError(
+                    f"streamed tool call at index {fidx} (choice {cidx}) "
+                    "never received a name"
+                )
+            args = slot["function"]["arguments"] or "{}"
+            try:
+                json.loads(args)
+            except (json.JSONDecodeError, TypeError) as exc:
+                raise StreamAssemblyError(
+                    f"streamed tool call at index {fidx} (choice {cidx}) "
+                    "ended with unbalanced JSON arguments"
+                ) from exc
+            slot["function"]["arguments"] = args
+            assembled.append(slot)
 
-    message: dict[str, Any] = {"role": role}
-    message["content"] = "".join(content_parts) if content_parts else None
-    if assembled:
-        message["tool_calls"] = assembled
-    if reasoning_parts:
-        message["reasoning_content"] = "".join(reasoning_parts)
+        message: dict[str, Any] = {"role": st["role"]}
+        message["content"] = "".join(st["content_parts"]) if st["content_parts"] else None
+        if assembled:
+            message["tool_calls"] = assembled
+        if st["reasoning_parts"]:
+            message["reasoning_content"] = "".join(st["reasoning_parts"])
+        finish = st["finish_reason"] or ("tool_calls" if assembled else "stop")
+        rebuilt_choices.append(
+            {"index": cidx, "message": message, "finish_reason": finish}
+        )
 
-    rebuilt_choice: dict[str, Any] = {
-        "index": 0,
-        "message": message,
-        "finish_reason": finish_reason or ("tool_calls" if assembled else "stop"),
-    }
-    head_choice = (head.get("choices") or [{}])[0]
-    head_choice.pop("delta", None)
-    head_choice.update(rebuilt_choice)
-    head["choices"] = [head_choice]
-    head["object"] = "chat.completion"
+    head["choices"] = rebuilt_choices
+    head["object"] = head.get("object") or "chat.completion"
+    # A reassembled response is no longer a stream of deltas.
     return head
+
+
+def normalize_delta_chunk(chunk: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a single streamed GLM delta chunk for an incremental stream.
+
+    The drop-in streaming path (:func:`glm_toolbridge.client.wrap` with
+    ``stream=True``) yields chunks one at a time so the harness assembles argument
+    fragments itself, exactly as it would for an OpenAI stream. This function fixes
+    the per-chunk divergences without full reassembly:
+
+    * tool-call argument FRAGMENTS are coerced to strings *without* whole-JSON
+      validation (OpenAI streaming fragments are partial by contract);
+    * GLM's ``reasoning_content`` is relocated out of the delta into a
+      ``_glm_reasoning`` side channel (deltas keep their incremental ``content``);
+    * any ``parallel_tool_calls`` envelope on a delta is flattened into
+      ``tool_calls`` so harnesses reading a flat array see the fragments.
+
+    The input is never mutated; a deep copy is returned.
+    """
+    if not isinstance(chunk, dict):
+        raise UnsupportedProtocolShape("stream chunk is not an object", fragment=chunk)
+
+    out = copy.deepcopy(chunk)
+    choices = out.get("choices")
+    if not isinstance(choices, list):
+        return out
+
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        delta = choice.get("delta")
+        if not isinstance(delta, dict):
+            continue
+        reasoning = delta.pop("reasoning_content", None)
+
+        # Flatten a parallel_tool_calls envelope on a delta into the flat array.
+        parallel = delta.pop("parallel_tool_calls", None)
+        if isinstance(parallel, list):
+            merged = list(delta.get("tool_calls") or [])
+            for frag in parallel:
+                if isinstance(frag, dict):
+                    if "type" not in frag:
+                        frag["type"] = "function"
+                    merged.append(frag)
+            delta["tool_calls"] = merged
+
+        calls = delta.get("tool_calls")
+        if isinstance(calls, list):
+            for frag in calls:
+                if not isinstance(frag, dict):
+                    continue
+                fn = frag.get("function")
+                if isinstance(fn, dict) and "arguments" in fn:
+                    fn["arguments"] = _coerce_arguments_fragment(fn["arguments"])
+
+        if reasoning is not None:
+            delta["_glm_reasoning"] = reasoning
+
+    out["object"] = out.get("object") or "chat.completion.chunk"
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -294,6 +388,15 @@ def denormalize_tools(openai_tools: list[dict[str, Any]]) -> list[dict[str, Any]
         params = fn.get("parameters")
         if params is None:
             params = {"type": "object", "properties": {}}
+        if not isinstance(params, dict):
+            # A malformed tool definition — parameters must be a JSON-schema
+            # object. Forwarding a string/list/scalar to GLM would surface as an
+            # opaque request-schema error far from the offending tool; raise
+            # loudly here instead, mirroring the tool-call normalizer's pattern.
+            raise UnsupportedProtocolShape(
+                f"tool definition {fn['name']!r} has a non-object parameters schema",
+                fragment=params,
+            )
         lowered_tool: dict[str, Any] = {
             "type": "function",
             "function": {

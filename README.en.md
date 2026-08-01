@@ -9,7 +9,7 @@
 <p><sub>Run GLM-5.2 behind any OpenAI-format coding agent without tool calls silently mis-parsing — a thin protocol adapter that leaves your harness's OpenAI code path untouched.</sub></p>
 
 <p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/SuperMarioYL/glm-toolbridge/releases"><img src="https://img.shields.io/github/v/release/SuperMarioYL/glm-toolbridge" alt="Release"></a>
   <a href="https://github.com/SuperMarioYL/glm-toolbridge/actions/workflows/ci.yml"><img src="https://github.com/SuperMarioYL/glm-toolbridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB.svg" alt="Python">
@@ -136,16 +136,19 @@ The same OpenAI-format harness: on the left it talks to GLM-5.2 directly and the
 - [x] **m1 protocol audit** — the four GLM-5.2 vs OpenAI tool-call deltas captured in `docs/PROTOCOL_DELTAS.md` with fixtures, each backed by an executable detector
 - [x] **m2 bidirectional adapter** — `normalize()` / `denormalize()` pass roundtrip tests across all four divergence fixtures
 - [x] **m3 drop-in wrapper** — `wrap()` transparently adapts an OpenAI-SDK client; `examples/` shows fail-without / work-with
+- [x] **v0.2.0 streaming drop-in** — `wrap()` no longer silently drops `stream=True`; it yields normalized incremental delta chunks (argument fragments coerced to JSON strings without per-fragment validation, reasoning relocated, parallel framing flattened) following the OpenAI streaming contract, and `assemble_stream` now reassembles every choice (n>1)
+- [x] **v0.2.0 async client** — `awrap()` adapts `AsyncOpenAI`; `await create(...)` returns a normalized completion and `stream=True` returns an async iterator of normalized chunks; no new third-party deps
+- [x] **v0.2.0 louder errors** — `_rebuild_like` no longer swallows SDK `model_validate` failures (now raises `UnsupportedProtocolShape`); `denormalize_tools` rejects non-object `parameters` loudly
 - [ ] Cover more GLM-5.2 tool-call edge cases (add deltas as real issues surface them)
 - [ ] Anthropic Messages-format adaptation (today: OpenAI `tool_calls` only)
 - [ ] Possibly extend to other Chinese model protocols — only if demand shows; depth over breadth
 
-> Out of scope for v0.1: web UI / dashboard, adapters for other models (Qwen / Kimi / DeepSeek / 豆包 / MiniMax), our own coding agent, a hosted service / billing, fine-tuning.
+> Out of scope for v0.2: web UI / dashboard, adapters for other models (Qwen / Kimi / DeepSeek / 豆包 / MiniMax), our own coding agent, a hosted service / billing, fine-tuning.
 
 <h2><img src="https://api.iconify.design/tabler:license.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> License & Contributing</h2>
 
-MIT licensed — see [LICENSE](./LICENSE). Issues and PRs welcome — especially if you hit a GLM-5.2 tool-call shape no current delta covers: paste the response into an issue and we'll add a delta.
+Apache 2.0 licensed — see [LICENSE](./LICENSE). Issues and PRs welcome — especially if you hit a GLM-5.2 tool-call shape no current delta covers: paste the response into an issue and we'll add a delta.
 
 ---
 
-<p align="center"><sub><a href="./LICENSE">MIT</a> © 2026 SuperMarioYL</sub></p>
+<p align="center"><sub><a href="./LICENSE">Apache 2.0</a> © 2026 SuperMarioYL</sub></p>

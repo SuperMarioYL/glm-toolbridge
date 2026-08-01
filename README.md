@@ -136,16 +136,19 @@ deltas_present(glm_raw_response)   # → [DeltaKind.ARG_ENCODING, DeltaKind.REAS
 - [x] **m1 协议审计**——把 GLM-5.2 vs OpenAI 的四条 tool-call 差异连同捕获的 fixture 落进 `docs/PROTOCOL_DELTAS.md`，每条都有可执行检测器
 - [x] **m2 双向适配器**——`normalize()` / `denormalize()` 在四条差异的 fixture 上通过 roundtrip 测试
 - [x] **m3 drop-in 包装器**——`wrap()` 透明适配 OpenAI-SDK client，`examples/` 跑通"未接入失败 / 接入成功"
+- [x] **v0.2.0 流式 drop-in**——`wrap()` 不再静默丢弃 `stream=True`，而是按 OpenAI 流式契约产出归一化后的增量分片（参数分片转成 JSON 字符串但不逐片校验，reasoning 剥离，并行调用展平），`assemble_stream` 也会拼装所有 choice（n>1）
+- [x] **v0.2.0 异步 client**——`awrap()` 适配 `AsyncOpenAI`，`await create(...)` 返回归一化结果；`stream=True` 返回归一化分片的异步迭代器；无新增第三方依赖
+- [x] **v0.2.0 更响亮的错误**——`_rebuild_like` 不再静默吞掉 SDK `model_validate` 失败（改抛 `UnsupportedProtocolShape`）；`denormalize_tools` 对非对象 `parameters` 直接报错
 - [ ] 覆盖更多 GLM-5.2 tool-call 边界场景（按真实 issue 反馈补 delta）
 - [ ] Anthropic Messages 格式适配（当前仅 OpenAI `tool_calls`）
 - [ ] 视需求决定是否扩展到其他国产模型协议——深度优先于广度
 
-> 不在 v0.1 范围内：Web UI / dashboard、其他模型（Qwen / Kimi / DeepSeek / 豆包 / MiniMax）的适配、自带的编码 agent、托管服务 / 计费、微调。
+> 不在 v0.2 范围内：Web UI / dashboard、其他模型（Qwen / Kimi / DeepSeek / 豆包 / MiniMax）的适配、自带的编码 agent、托管服务 / 计费、微调。
 
 <h2><img src="https://api.iconify.design/tabler:license.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> 许可与贡献</h2>
 
-MIT 许可证，详见 [LICENSE](./LICENSE)。欢迎提交 issue 或 PR——尤其是你撞见了某个当前 delta 没覆盖的 GLM-5.2 tool-call 形状，请把那段响应贴进 issue，我们会补一条 delta。
+Apache 2.0 许可证，详见 [LICENSE](./LICENSE)。欢迎提交 issue 或 PR——尤其是你撞见了某个当前 delta 没覆盖的 GLM-5.2 tool-call 形状，请把那段响应贴进 issue，我们会补一条 delta。
 
 ---
 
-<p align="center"><sub><a href="./LICENSE">MIT</a> © 2026 SuperMarioYL</sub></p>
+<p align="center"><sub><a href="./LICENSE">Apache 2.0</a> © 2026 SuperMarioYL</sub></p>

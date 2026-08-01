@@ -24,7 +24,7 @@ from .adapter import (
     denormalize_request,
     normalize_response,
 )
-from .client import GLM_DEFAULT_BASE_URL, BridgedClient, wrap
+from .client import GLM_DEFAULT_BASE_URL, AsyncBridgedClient, BridgedClient, awrap, wrap
 from .errors import (
     DenormalizeError,
     MalformedToolArguments,
@@ -32,16 +32,18 @@ from .errors import (
     ToolBridgeError,
     UnsupportedProtocolShape,
 )
-from .normalize import assemble_stream, denormalize_tools, normalize
+from .normalize import assemble_stream, denormalize_tools, normalize, normalize_delta_chunk
 from .protocol import DELTAS, DeltaKind, ProtocolDelta, deltas_present, get_delta
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "__version__",
     # client
     "wrap",
+    "awrap",
     "BridgedClient",
+    "AsyncBridgedClient",
     "GLM_DEFAULT_BASE_URL",
     # adapter (typed)
     "normalize_response",
@@ -53,6 +55,7 @@ __all__ = [
     "normalize",
     "denormalize_tools",
     "assemble_stream",
+    "normalize_delta_chunk",
     # protocol (audit)
     "DELTAS",
     "DeltaKind",
