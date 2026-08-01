@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "name": "glm-toolbridge",
+  "github": "https://github.com/SuperMarioYL/glm-toolbridge",
+  "host": "glm-toolbridge.lei6393.com",
+  "lang": { "primary": "zh", "toggle": true },
+  "accent": ["#4d9bff", "#2b7fff", "#0ea5e9"],
+  "hero": {
+    "eyebrow": {
+      "zh": "一行接入 · 协议无感 · 开源",
+      "en": "One line · Protocol-invisible · Open source"
+    },
+    "headline": {
+      "zh": "把国产大模型接进任意编码 agent\n工具调用不再静默错配",
+      "en": "Wire a Chinese frontier model into any coding agent\nTool calls stop breaking in silence"
+    },
+    "sub": {
+      "zh": "一层薄协议适配：你现有的 agent 代码路径一行不改，错位的工具调用自动归位。",
+      "en": "A thin protocol shim: your existing agent code path stays untouched while misaligned tool calls fall into place."
+    },
+    "command": "uv add glm-toolbridge",
+    "cta": { "zh": "快速开始", "en": "Quickstart" },
+    "ctaGithub": { "zh": "GitHub", "en": "GitHub" },
+    "scroll": { "zh": "看看它解决了什么", "en": "See what it fixes" }
+  },
+  "advantages": [
+    {
+      "title": {
+        "zh": "静默错配变显式成功",
+        "en": "Silent mis-parses become explicit success"
+      },
+      "body": {
+        "zh": "换后端模型后，工具调用的参数形状对不上，agent 三帧之后才崩。一层适配把它归位成标准形状，调用直接成功。",
+        "en": "Swap the backend model and the tool-call argument shape stops matching — the agent crashes three frames later. The shim normalizes it to the standard shape so the call just works."
+      },
+      "chips": ["› 参数编码归一", "› 并行调用展平", "› 思考链剥离"]
+    },
+    {
+      "title": {
+        "zh": "agent 代码一行不改",
+        "en": "Your agent's code, untouched"
+      },
+      "body": {
+        "zh": "一行 wrap 你现有的客户端，工具循环、参数解析、调度逻辑全部保持原样——它根本不知道后端换了模型。",
+        "en": "Wrap your existing client in one line; the tool loop, argument parsing, and dispatch all stay exactly as they were — it never learns the backend model changed."
+      },
+      "chips": ["› 透明代理", "› 同步 + 异步", "› 流式也支持"]
+    },
+    {
+      "title": {
+        "zh": "流式不再被吞",
+        "en": "Streaming is no longer dropped"
+      },
+      "body": {
+        "zh": "开启流式时，增量分片被原样归一后交给 agent，工具参数由 agent 自己拼装——和标准流式协议一模一样。",
+        "en": "With streaming on, incremental fragments are normalized and handed to the agent, which assembles the arguments itself — exactly like the standard streaming protocol."
+      },
+      "chips": ["› 增量分片归一", "› 思考链旁路", "› 多选不丢"]
+    },
+    {
+      "title": {
+        "zh": "出错就大声报",
+        "en": "Failures are loud, never silent"
+      },
+      "body": {
+        "zh": "遇到没覆盖的工具调用形状，抛一个有名字的显式错误，而不是返回半成品让 agent 在几帧之后才崩——和今天的静默错配正好相反。",
+        "en": "On a tool-call shape it doesn't cover, it raises a named, explicit error instead of returning a half-parsed payload that breaks the agent later — the opposite of today's silent mis-parsing."
+      },
+      "chips": ["› 命名异常", "› 输入校验", "› 协议审计可查"]
+    }
+  ],
+  "scene": { "kind": "hub-nodes", "nodes": ["Claude Code", "Cursor", "GLM-5.2"] },
+  "cta": {
+    "headline": {
+      "zh": "一行接入，工具循环跑通",
+      "en": "One line in, the tool loop runs clean"
+    },
+    "sub": {
+      "zh": "开源 Apache 2.0，pip 即装，国产模型适配先行。",
+      "en": "Open source under Apache 2.0, pip-installable, Chinese-model adapters first."
+    },
+    "button": { "zh": "查看快速开始", "en": "Read the quickstart" }
+  },
+  "footer": {
+    "tag": { "zh": "Apache 2.0 · 开源 · 单进程库", "en": "Apache 2.0 · Open source · Single-process library" }
+  }
+}
