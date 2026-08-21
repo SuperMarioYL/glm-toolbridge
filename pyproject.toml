@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "glm-toolbridge"
-version = "0.2.0"
+version = "0.3.0"
 description = "A thin protocol adapter that reconciles GLM-5.2 tool calls with the OpenAI tool_calls schema coding-agent harnesses hardcode."
 readme = "README.md"
 requires-python = ">=3.12"

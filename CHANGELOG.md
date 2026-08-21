@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-22
+
+### Fixed
+- **Relocate spilled content for `parallel_tool_calls`-only messages.**
+  `_split_reasoning` gated content relocation on `message.tool_calls` only,
+  while `normalize()` computes `has_calls` from both `tool_calls` AND
+  `parallel_tool_calls` and then nulls `content`. A `parallel_tool_calls`-only
+  envelope with non-null content therefore had its spilled prose silently
+  dropped to `None` instead of relocated into `_glm_reasoning`. The gate now
+  uses the same `has_calls` condition `normalize()` uses, honoring the
+  "relocate rather than drop" contract.
+- **Preserve `usage` and late top-level fields when reassembling a stream.**
+  `assemble_stream` seeded the reassembled head from `copy.deepcopy(chunks[0])`
+  and only replaced `choices`, so any top-level field arriving exclusively in a
+  later chunk was lost — most commonly `usage` token stats, which per the
+  OpenAI streaming contract (and `stream_options.include_usage`) arrive in the
+  FINAL chunk with an empty `choices` list. The reassembled response now merges
+  late non-choices top-level fields that `chunks[0]` lacked, so token/cost
+  accounting survives stream reassembly.
+
+### Changed
+- Version bumped to 0.3.0 in `pyproject.toml`, `VERSION`, and
+  `glm_toolbridge.__version__`.
+
 ## [0.2.0] - 2026-08-01
 
 ### Fixed
@@ -59,5 +83,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`UnsupportedProtocolShape`, `MalformedToolArguments`, `StreamAssemblyError`)
   so failures are loud, never silent.
 
+[0.3.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.3.0
 [0.2.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.2.0
 [0.1.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.1.0

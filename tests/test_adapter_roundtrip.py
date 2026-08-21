@@ -58,6 +58,46 @@ def test_reasoning_interleave_roundtrip(samples):
     assert "config.yaml" in msg.glm_reasoning
 
 
+def test_parallel_only_content_is_relocated_not_dropped():
+    """fix-split-reasoning-parallel-content: when GLM sends a
+    parallel_tool_calls-only envelope with non-null content (and no flat
+    tool_calls array), the spilled prose must be relocated into
+    _glm_reasoning — not silently dropped to None by normalize(), which
+    computes has_calls from BOTH tool_calls and parallel_tool_calls."""
+    glm_response = {
+        "id": "chatcmpl-glm-parc-1",
+        "object": "chat.completion",
+        "model": "glm-5.2",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Let me list the directory and grep for the symbol.",
+                    "parallel_tool_calls": [
+                        {"function": {"name": "list_dir", "arguments": {"path": "."}}},
+                        {"function": {"name": "grep",
+                                      "arguments": {"pattern": "TODO", "path": "src"}}},
+                    ],
+                },
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    result = normalize_response(glm_response)
+    _assert_valid_openai(result)
+    msg = result.completion.choices[0].message
+    # content forced null when calls present (OpenAI invariant)
+    assert msg.content is None
+    # the spilled prose was RELOCATED, not dropped
+    assert msg.glm_reasoning is not None
+    assert "list the directory" in msg.glm_reasoning
+    # both parallel calls survived into the flat tool_calls array
+    names = [c.function.name for c in result.completion.tool_calls]
+    assert names == ["list_dir", "grep"]
+    assert result.completion.choices[0].finish_reason == "tool_calls"
+
+
 def test_streaming_assembly_roundtrip(samples):
     fix = samples["streaming_assembly"]
     result = normalize_response(fix["glm_stream_chunks"])  # list -> assemble

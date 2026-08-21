@@ -365,6 +365,59 @@ def test_assemble_stream_handles_multiple_choices():
     assert [json.loads(a) for a in args] == [{"a": 1}, {"b": 2}]
 
 
+def test_assemble_stream_preserves_late_usage():
+    """fix-assemble-stream-usage-loss: usage token stats arrive in the FINAL
+    chunk (with empty choices, per stream_options.include_usage); the
+    reassembled non-streaming response must carry that usage, not silently
+    drop it because head was seeded from chunks[0]."""
+    chunks = [
+        {
+            "id": "chatcmpl-usage-1",
+            "object": "chat.completion.chunk",
+            "model": "glm-5.2",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {"role": "assistant", "content": "hello"},
+                    "finish_reason": None,
+                }
+            ],
+        },
+        {
+            "object": "chat.completion.chunk",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop",
+                }
+            ],
+        },
+        # Final chunk: carries usage with EMPTY choices (the OpenAI
+        # stream_options.include_usage contract). chunks[0] had no usage, so
+        # without the fix this is silently lost.
+        {
+            "object": "chat.completion.chunk",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 12,
+                "completion_tokens": 7,
+                "total_tokens": 19,
+            },
+        },
+    ]
+    assembled = assemble_stream(chunks)
+    # The reassembled response reflects the stream's final usage metadata.
+    assert assembled["usage"] == {
+        "prompt_tokens": 12,
+        "completion_tokens": 7,
+        "total_tokens": 19,
+    }
+    # And the assembled choices still come through (content reassembled).
+    assert assembled["choices"][0]["message"]["content"] == "hello"
+    assert assembled["choices"][0]["finish_reason"] == "stop"
+
+
 # --------------------------------------------------------------------------- #
 # feat_async_client                                                           #
 # --------------------------------------------------------------------------- #

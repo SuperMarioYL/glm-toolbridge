@@ -98,7 +98,10 @@ def _split_reasoning(message: dict[str, Any]) -> str | None:
     """
     reasoning = message.pop("reasoning_content", None)
     # When a call is present, GLM sometimes also leaves prose in `content`.
-    if message.get("tool_calls") and message.get("content"):
+    # Use the same has_calls condition normalize() uses (flat tool_calls OR
+    # parallel_tool_calls) so a parallel_tool_calls-only envelope with spilled
+    # content relocates the prose here rather than having normalize() null it.
+    if (message.get("tool_calls") or message.get("parallel_tool_calls")) and message.get("content"):
         spilled = message.pop("content")
         message["content"] = None
         if reasoning:
@@ -245,6 +248,24 @@ def assemble_stream(chunks: list[dict[str, Any]]) -> dict[str, Any]:
         )
 
     head["choices"] = rebuilt_choices
+
+    # Merge late top-level fields that chunks[0] lacked. Per the OpenAI
+    # streaming contract (and GLM's OpenAI-compatible endpoint under
+    # stream_options.include_usage), metadata such as ``usage`` token stats
+    # arrives in the FINAL chunk — typically with an empty ``choices`` list —
+    # so a head seeded from ``chunks[0]`` would silently drop it. Carry any
+    # non-choices top-level field from the chunk that carries it into head.
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        for key, value in chunk.items():
+            if key == "choices":
+                continue
+            if value is None:
+                continue
+            if key not in head or head[key] is None:
+                head[key] = value
+
     head["object"] = head.get("object") or "chat.completion"
     # A reassembled response is no longer a stream of deltas.
     return head
