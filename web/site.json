@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "content_version": "v0.4.0",
   "name": "glm-toolbridge",
   "github": "https://github.com/SuperMarioYL/glm-toolbridge",
   "host": "glm-toolbridge.lei6393.com",
@@ -33,7 +34,7 @@
         "zh": "换后端模型后，工具调用的参数形状对不上，agent 三帧之后才崩。一层适配把它归位成标准形状，调用直接成功。",
         "en": "Swap the backend model and the tool-call argument shape stops matching — the agent crashes three frames later. The shim normalizes it to the standard shape so the call just works."
       },
-      "chips": ["› 参数编码归一", "› 并行调用展平", "› 思考链剥离"]
+      "chips": ["› 参数编码归一", "› 空参数归一", "› 并行调用展平", "› 思考链剥离"]
     },
     {
       "title": {
@@ -55,7 +56,7 @@
         "zh": "开启流式时，增量分片被原样归一后交给 agent，工具参数由 agent 自己拼装——和标准流式协议一模一样。",
         "en": "With streaming on, incremental fragments are normalized and handed to the agent, which assembles the arguments itself — exactly like the standard streaming protocol."
       },
-      "chips": ["› 增量分片归一", "› 思考链旁路", "› 多选不丢"]
+      "chips": ["› 增量分片归一", "› 原生对象分片", "› 思考链旁路", "› 多选不丢"]
     },
     {
       "title": {
