@@ -205,3 +205,72 @@ def test_passthrough_response_without_choices():
 
     env = {"error": {"message": "rate limited"}}
     assert normalize(env) == env
+
+
+def test_assemble_stream_coerces_native_object_fragment():
+    """fix-assemble-stream-fragment-coercion: a streamed fragment whose
+    function.arguments is a native JSON object (GLM's arg_encoding delta) must
+    be coerced to a string and concatenated, not crash assemble_stream with a
+    str+=dict TypeError. Mirrors normalize_delta_chunk's coercion of fragments."""
+    chunks = [
+        {
+            "object": "chat.completion.chunk",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "c1",
+                                "type": "function",
+                                "function": {
+                                    "name": "write_file",
+                                    # native object, NOT a JSON string
+                                    "arguments": {"path": "out.txt"},
+                                },
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+    ]
+    result = normalize_response(chunks)
+    _assert_valid_openai(result)
+    call = result.completion.tool_calls[0]
+    assert call.function.name == "write_file"
+    assert json.loads(call.function.arguments) == {"path": "out.txt"}
+
+
+def test_normalize_handles_empty_string_arguments():
+    """fix-coerce-empty-arguments-string: a non-streaming tool call whose
+    function.arguments is the empty string (a no-arg convention the OpenAI SDK
+    accepts as a plain str) must normalize to '{}', not raise
+    MalformedToolArguments. Matches assemble_stream's ``or "{}"`` behavior."""
+    resp = {
+        "object": "chat.completion",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {"name": "noop", "arguments": ""},
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+    }
+    result = normalize_response(resp)
+    _assert_valid_openai(result)
+    call = result.completion.tool_calls[0]
+    assert call.function.arguments == "{}"
+    assert json.loads(call.function.arguments) == {}

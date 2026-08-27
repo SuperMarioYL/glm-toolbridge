@@ -40,7 +40,10 @@ def _coerce_arguments_to_json_string(args: Any, *, name: str | None) -> str:
     GLM may hand us a native object/list, an already-encoded JSON string, or
     ``None``. We normalize all of them; anything else is loud.
     """
-    if args is None:
+    if args is None or args == "":
+        # None and the empty string both mean "no arguments". Treat "" as
+        # "{}" to match assemble_stream's ``or "{}"`` and to avoid rejecting
+        # a no-arg call shape the OpenAI SDK accepts as a plain str field.
         return "{}"
     if isinstance(args, (dict, list)):
         return json.dumps(args, ensure_ascii=False, separators=(",", ":"))
@@ -212,7 +215,14 @@ def assemble_stream(chunks: list[dict[str, Any]]) -> dict[str, Any]:
                 if fn.get("name"):
                     slot["function"]["name"] = fn["name"]
                 if fn.get("arguments"):
-                    slot["function"]["arguments"] += fn["arguments"]
+                    # Coerce the fragment to a string before concatenating. GLM's
+                    # arg_encoding delta may emit arguments as a native object even
+                    # in a streamed fragment; ``+=`` on a dict raises TypeError. The
+                    # per-chunk path (normalize_delta_chunk) already coerces via
+                    # _coerce_arguments_fragment; assemble_stream must do the same.
+                    slot["function"]["arguments"] += _coerce_arguments_fragment(
+                        fn["arguments"]
+                    )
 
     rebuilt_choices: list[dict[str, Any]] = []
     for cidx in sorted(by_choice):

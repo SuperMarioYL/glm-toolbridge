@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-28
+
+### Fixed
+- **Coerce streamed argument fragments before concatenating in `assemble_stream`.**
+  `assemble_stream` concatenated streamed tool-call argument fragments with
+  `slot["function"]["arguments"] += fn["arguments"]`, assuming every fragment's
+  arguments was a string. GLM's documented `arg_encoding` delta may return
+  `function.arguments` as a native JSON object; such a fragment raised an
+  unhandled `TypeError` (str += dict), crashing stream reassembly. The
+  per-chunk path `normalize_delta_chunk` already coerced fragments via
+  `_coerce_arguments_fragment`; `assemble_stream` now does the same before
+  concatenating.
+- **Treat empty-string tool-call arguments as no-args, not malformed.**
+  `_coerce_arguments_to_json_string` rejected an empty-string `arguments`
+  (`""`) with `MalformedToolArguments`, while the sibling `assemble_stream`
+  normalized empty assembled arguments to `"{}"`. A non-streaming tool call
+  whose `function.arguments` was `""` (a no-arg convention the OpenAI SDK
+  accepts as a plain `str`) therefore crashed the bridge. Empty-string
+  arguments now normalize to `"{}"`, matching `assemble_stream`; non-empty
+  non-JSON strings still raise.
+
+### Changed
+- Version bumped to 0.4.0 in `pyproject.toml`, `VERSION`, and
+  `glm_toolbridge.__version__`.
+
 ## [0.3.0] - 2026-08-22
 
 ### Fixed
