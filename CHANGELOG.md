@@ -4,6 +4,35 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-07
+
+### Fixed
+- **Relabel the reassembled stream response as `chat.completion`, not
+  `chat.completion.chunk`.** `assemble_stream` seeded the reassembled head
+  from `copy.deepcopy(chunks[0])`, so `head["object"]` inherited the streamed
+  chunk value `"chat.completion.chunk"`. The relabel
+  `head["object"] = head.get("object") or "chat.completion"` could not fire
+  (the chunk value is truthy), so the reassembled response — structurally a
+  non-streaming `chat.completion` (it carries `message`, not `delta`) — still
+  advertised itself as a streaming chunk. A harness switching on `object` to
+  route chunk-vs-completion handling would misroute it, and re-validation
+  against the OpenAI SDK's `Literal["chat.completion"]` would reject it. The
+  object field is now set to `"chat.completion"` unconditionally on reassembly.
+- **Detect reasoning interleave for `parallel_tool_calls`-only spilled
+  content.** `_detect_reasoning_interleave` flagged spilled content only when
+  a flat `tool_calls` array was present, but the v0.3.0 `_split_reasoning` fix
+  expanded the normalizer to also relocate spilled content for a
+  `parallel_tool_calls`-only envelope. Such an envelope therefore had its
+  prose relocated into `_glm_reasoning` (the reasoning_interleave transform
+  ran) yet `deltas_applied` omitted `REASONING_INTERLEAVE` — the audit
+  under-reported a divergence the library actually fixed. The detector's
+  spilled-content check now uses the same `has_calls` condition the normalizer
+  uses (`tool_calls` OR `parallel_tool_calls`), so the audit stays honest.
+
+### Changed
+- Version bumped to 0.5.0 in `pyproject.toml`, `VERSION`, and
+  `glm_toolbridge.__version__`. Added `content_version` to `web/site.json`.
+
 ## [0.4.0] - 2026-08-28
 
 ### Fixed
@@ -108,6 +137,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`UnsupportedProtocolShape`, `MalformedToolArguments`, `StreamAssemblyError`)
   so failures are loud, never silent.
 
+[0.5.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.5.0
+[0.4.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.4.0
 [0.3.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.3.0
 [0.2.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.2.0
 [0.1.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.1.0
