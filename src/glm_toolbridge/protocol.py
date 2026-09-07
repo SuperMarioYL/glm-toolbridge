@@ -138,8 +138,16 @@ def _detect_reasoning_interleave(response: dict[str, Any]) -> bool:
     message = choices[0].get("message") or {}
     if message.get("reasoning_content"):
         return True
-    # Reasoning spliced into content while tool_calls are also present.
-    if message.get("tool_calls") and message.get("content"):
+    # Reasoning spliced into content while a call is present. Use the same
+    # has_calls condition the normalizer uses (flat tool_calls OR
+    # parallel_tool_calls) so a parallel_tool_calls-only envelope with spilled
+    # content is detected here — the normalizer relocates that prose into
+    # _glm_reasoning, and deltas_applied must honestly record that the
+    # reasoning_interleave transform ran.
+    has_calls = bool(message.get("tool_calls")) or bool(
+        message.get("parallel_tool_calls")
+    )
+    if has_calls and message.get("content"):
         return True
     return False
 

@@ -101,3 +101,31 @@ def test_delta_summaries_are_documented():
         assert d.glm_shape
         assert d.openai_shape
         assert d.glm_shape != d.openai_shape
+
+
+def test_reasoning_interleave_detected_for_parallel_only_content():
+    """fix-detect-reasoning-parallel-content: a parallel_tool_calls-only envelope
+    with non-null content has its spilled prose relocated into _glm_reasoning by
+    the normalizer (the reasoning_interleave transform runs), so the detector
+    must flag REASONING_INTERLEAVE — mirroring the v0.3.0 _split_reasoning
+    expansion that added parallel_tool_calls to the has_calls condition."""
+    parallel_only_spilled = {
+        "object": "chat.completion",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Let me list the directory and grep for the symbol.",
+                    "parallel_tool_calls": [
+                        {"function": {"name": "list_dir", "arguments": {"path": "."}}},
+                        {"function": {"name": "grep",
+                                      "arguments": {"pattern": "TODO", "path": "src"}}},
+                    ],
+                },
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    assert get_delta(DeltaKind.REASONING_INTERLEAVE).detect(parallel_only_spilled) is True
+    assert DeltaKind.REASONING_INTERLEAVE in deltas_present(parallel_only_spilled)
