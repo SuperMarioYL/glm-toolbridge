@@ -276,8 +276,12 @@ def assemble_stream(chunks: list[dict[str, Any]]) -> dict[str, Any]:
             if key not in head or head[key] is None:
                 head[key] = value
 
-    head["object"] = head.get("object") or "chat.completion"
-    # A reassembled response is no longer a stream of deltas.
+    # Reassembly by definition yields a complete non-streaming completion, not a
+    # stream of deltas. The head was seeded from chunks[0], so it inherited the
+    # chunk value "chat.completion.chunk"; relabel it so a harness switching on
+    # ``object`` routes the reassembled response as a completion (and so
+    # re-validation against the OpenAI SDK's ``Literal["chat.completion"]`` passes).
+    head["object"] = "chat.completion"
     return head
 
 

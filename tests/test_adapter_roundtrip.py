@@ -274,3 +274,29 @@ def test_normalize_handles_empty_string_arguments():
     call = result.completion.tool_calls[0]
     assert call.function.arguments == "{}"
     assert json.loads(call.function.arguments) == {}
+
+
+def test_assemble_stream_relabels_object_as_completion(samples):
+    """fix-assemble-stream-object-relabel: a reassembled streamed response is
+    structurally a non-streaming chat.completion (it carries message, not
+    delta), so its object field must be relabeled from the inherited
+    "chat.completion.chunk" (carried from chunks[0]) to "chat.completion".
+    The ``or "chat.completion"`` fallback could not fire on the truthy chunk
+    value; relabel unconditionally so a harness switching on object routes it
+    as a completion and so SDK Literal["chat.completion"] re-validation passes."""
+    from glm_toolbridge.normalize import assemble_stream
+
+    chunks = samples["streaming_assembly"]["glm_stream_chunks"]
+    # Every source chunk advertises itself as a streaming chunk.
+    assert all(c["object"] == "chat.completion.chunk" for c in chunks)
+
+    assembled = assemble_stream(chunks)
+    # The reassembled head is relabeled as a complete completion, not a chunk.
+    assert assembled["object"] == "chat.completion"
+    # And it carries message (non-streaming shape), not delta.
+    assert "message" in assembled["choices"][0]
+    assert "delta" not in assembled["choices"][0]
+
+    result = normalize_response(chunks)
+    assert result.completion.object == "chat.completion"
+    assert result.as_openai_dict()["object"] == "chat.completion"
