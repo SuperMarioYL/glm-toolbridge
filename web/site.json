@@ -1,88 +1,211 @@
 {
-  "schema": 1,
-  "content_version": "0.5.0",
+  "schema": 3,
   "name": "glm-toolbridge",
   "github": "https://github.com/SuperMarioYL/glm-toolbridge",
   "host": "glm-toolbridge.lei6393.com",
-  "lang": { "primary": "zh", "toggle": true },
-  "accent": ["#4d9bff", "#2b7fff", "#0ea5e9"],
+  "palette": "auto",
+  "lang": {
+    "primary": "en",
+    "toggle": true
+  },
+  "meta": {
+    "visual_style": "neon-particle",
+    "demo_source": "docs/demo-results.json"
+  },
   "hero": {
-    "eyebrow": {
-      "zh": "一行接入 · 协议无感 · 开源",
-      "en": "One line · Protocol-invisible · Open source"
-    },
     "headline": {
-      "zh": "把国产大模型接进任意编码 agent\n工具调用不再静默错配",
-      "en": "Wire a Chinese frontier model into any coding agent\nTool calls stop breaking in silence"
+      "en": "Make tool-call arguments match your harness.",
+      "zh": "让工具参数匹配现有调用框架。"
     },
     "sub": {
-      "zh": "一层薄协议适配：你现有的 agent 代码路径一行不改，错位的工具调用自动归位。",
-      "en": "A thin protocol shim: your existing agent code path stays untouched while misaligned tool calls fall into place."
+      "en": "glm-toolbridge converts supported GLM-style tool-call shapes into the OpenAI-compatible structures expected by a Python harness.",
+      "zh": "glm-toolbridge 将已支持的 GLM 风格工具调用形状转换成 Python 调用框架期望的 OpenAI 兼容结构。"
     },
-    "command": "uv add glm-toolbridge",
-    "cta": { "zh": "快速开始", "en": "Quickstart" },
-    "ctaGithub": { "zh": "GitHub", "en": "GitHub" },
-    "scroll": { "zh": "看看它解决了什么", "en": "See what it fixes" }
+    "href": "#quickstart"
   },
   "advantages": [
     {
       "title": {
-        "zh": "静默错配变显式成功",
-        "en": "Silent mis-parses become explicit success"
+        "en": "One protocol boundary",
+        "zh": "集中协议边界"
       },
       "body": {
-        "zh": "换后端模型后，工具调用的参数形状对不上，agent 三帧之后才崩。一层适配把它归位成标准形状，调用直接成功。",
-        "en": "Swap the backend model and the tool-call argument shape stops matching — the agent crashes three frames later. The shim normalizes it to the standard shape so the call just works."
-      },
-      "chips": ["› 参数编码归一", "› 空参数归一", "› 并行调用展平", "› 思考链剥离"]
+        "en": "Conversion stays outside your tool dispatch code.",
+        "zh": "转换逻辑集中在工具分发代码之外。"
+      }
     },
     {
       "title": {
-        "zh": "agent 代码一行不改",
-        "en": "Your agent's code, untouched"
+        "en": "Multiple calling modes",
+        "zh": "多种调用模式"
       },
       "body": {
-        "zh": "一行 wrap 你现有的客户端，工具循环、参数解析、调度逻辑全部保持原样——它根本不知道后端换了模型。",
-        "en": "Wrap your existing client in one line; the tool loop, argument parsing, and dispatch all stay exactly as they were — it never learns the backend model changed."
-      },
-      "chips": ["› 透明代理", "› 同步 + 异步", "› 流式也支持"]
+        "en": "Sync, async and stream adapters share normalization.",
+        "zh": "同步、异步与流式适配共用归一化逻辑。"
+      }
     },
     {
       "title": {
-        "zh": "流式不再被吞",
-        "en": "Streaming is no longer dropped"
+        "en": "Explicit failures",
+        "zh": "明确失败"
       },
       "body": {
-        "zh": "开启流式时，增量分片被原样归一后交给 agent，工具参数由 agent 自己拼装——和标准流式协议一模一样。",
-        "en": "With streaming on, incremental fragments are normalized and handed to the agent, which assembles the arguments itself — exactly like the standard streaming protocol."
-      },
-      "chips": ["› 增量分片归一", "› 原生对象分片", "› 思考链旁路", "› 多选不丢"]
-    },
-    {
-      "title": {
-        "zh": "出错就大声报",
-        "en": "Failures are loud, never silent"
-      },
-      "body": {
-        "zh": "遇到没覆盖的工具调用形状，抛一个有名字的显式错误，而不是返回半成品让 agent 在几帧之后才崩——和今天的静默错配正好相反。",
-        "en": "On a tool-call shape it doesn't cover, it raises a named, explicit error instead of returning a half-parsed payload that breaks the agent later — the opposite of today's silent mis-parsing."
-      },
-      "chips": ["› 命名异常", "› 输入校验", "› 协议审计可查"]
+        "en": "Unsupported shapes produce named errors.",
+        "zh": "未支持形状产生明确命名的错误。"
+      }
     }
   ],
-  "scene": { "kind": "hub-nodes", "nodes": ["Claude Code", "Cursor", "GLM-5.2"] },
-  "cta": {
-    "headline": {
-      "zh": "一行接入，工具循环跑通",
-      "en": "One line in, the tool loop runs clean"
+  "demo": {
+    "title": {
+      "en": "Run it on a complete example",
+      "zh": "运行完整示例"
     },
-    "sub": {
-      "zh": "开源 Apache 2.0，pip 即装，国产模型适配先行。",
-      "en": "Open source under Apache 2.0, pip-installable, Chinese-model adapters first."
+    "note": {
+      "en": "The included Python script defines a complete response with object arguments and prints the normalized message.",
+      "zh": "随仓 Python 脚本定义完整的对象参数响应，并打印归一化后的消息。"
     },
-    "button": { "zh": "查看快速开始", "en": "Read the quickstart" }
+    "source": "https://github.com/SuperMarioYL/glm-toolbridge/blob/main/docs/demo-results.json",
+    "steps": [
+      {
+        "label": "Recorded run",
+        "body": "Synthetic native-object arguments converted through the production normalize_response function; no live GLM endpoint.",
+        "command": ".venv/bin/python examples/presentation-demo.py",
+        "output": "{\n  \"role\": \"assistant\",\n  \"tool_calls\": [\n    {\n      \"id\": \"call-1\",\n      \"type\": \"function\",\n      \"function\": {\n        \"name\": \"weather\",\n        \"arguments\": \"{\\\"city\\\":\\\"Beijing\\\"}\"\n      }\n    }\n  ],\n  \"content\": null,\n  \"_glm_reasoning\": \"Checking the city\"\n}",
+        "image": "/assets/presentation/demo-0-light.svg",
+        "imageDark": "/assets/presentation/demo-0-dark.svg"
+      }
+    ]
   },
-  "footer": {
-    "tag": { "zh": "Apache 2.0 · 开源 · 单进程库", "en": "Apache 2.0 · Open source · Single-process library" }
+  "quickstart": {
+    "title": {
+      "en": "Try it locally",
+      "zh": "本地上手"
+    },
+    "body": {
+      "en": "The included Python script defines a complete response with object arguments and prints the normalized message.",
+      "zh": "随仓 Python 脚本定义完整的对象参数响应，并打印归一化后的消息。"
+    },
+    "steps": [
+      {
+        "title": {
+          "en": "Install from source",
+          "zh": "从源码安装"
+        },
+        "code": "git clone https://github.com/SuperMarioYL/glm-toolbridge.git\ncd glm-toolbridge\nuv venv .venv\nuv pip install --python .venv/bin/python -e .\nsource .venv/bin/activate"
+      },
+      {
+        "title": {
+          "en": "Run the included example",
+          "zh": "运行随仓示例"
+        },
+        "code": ".venv/bin/python examples/presentation-demo.py"
+      }
+    ]
+  },
+  "limitations": [
+    {
+      "en": "The demo uses a synthetic response. It does not establish the behavior of any current GLM deployment or compatibility with every agent harness.",
+      "zh": "示例使用合成响应，不代表当前 GLM 部署的实际行为，也不证明兼容所有 Agent 框架。"
+    },
+    {
+      "en": "Only the supported OpenAI-style contract is adapted; Anthropic Messages is outside the current adapter.",
+      "zh": "当前只适配已支持的 OpenAI 风格契约，Anthropic Messages 不在此范围。"
+    }
+  ],
+  "scene": {
+    "kind": "neon-graph",
+    "fallback": "/assets/presentation/scene-dark.svg",
+    "fallbackLight": "/assets/presentation/scene-light.svg"
+  },
+  "story": {
+    "intro": {
+      "title": {
+        "en": "A concrete task",
+        "zh": "从实际任务出发"
+      },
+      "body": {
+        "en": "A tool dispatcher may expect arguments as a JSON string while a response contains an object. Keep that protocol conversion in one adapter so the tool dispatcher can continue using its established input contract.",
+        "zh": "工具分发器可能要求 arguments 为 JSON 字符串，而响应却给出对象。把协议转换集中到适配层，工具分发器便可沿用已有输入契约。"
+      }
+    },
+    "sections": [
+      {
+        "title": {
+          "en": "Follow the operation",
+          "zh": "处理过程"
+        },
+        "body": {
+          "en": "Request denormalization prepares tool definitions. Response normalization handles supported argument encoding, parallel-call and reasoning differences. Client wrappers apply the transformations to sync, async and streamed results, while explicit errors identify unsupported shapes.",
+          "zh": "请求转换准备工具定义；响应归一化处理已支持的参数编码、并行调用和推理字段差异。客户端包装器将转换应用于同步、异步和流式结果，未支持形状通过明确错误报告。"
+        },
+        "image": {
+          "light": "/assets/presentation/process-light.svg",
+          "dark": "/assets/presentation/process-dark.svg",
+          "alt": {
+            "en": "Follow the operation",
+            "zh": "处理过程"
+          }
+        }
+      },
+      {
+        "title": {
+          "en": "How glm-toolbridge works",
+          "zh": "glm-toolbridge 的工作方式"
+        },
+        "body": {
+          "en": "Request denormalization prepares tool definitions. Response normalization handles supported argument encoding, parallel-call and reasoning differences. Client wrappers apply the transformations to sync, async and streamed results, while explicit errors identify unsupported shapes.",
+          "zh": "请求转换准备工具定义；响应归一化处理已支持的参数编码、并行调用和推理字段差异。客户端包装器将转换应用于同步、异步和流式结果，未支持形状通过明确错误报告。"
+        },
+        "image": {
+          "light": "/assets/presentation/architecture-light.svg",
+          "dark": "/assets/presentation/architecture-dark.svg",
+          "alt": {
+            "en": "How glm-toolbridge works",
+            "zh": "glm-toolbridge 的工作方式"
+          }
+        }
+      },
+      {
+        "title": {
+          "en": "Connect the pieces",
+          "zh": "输入与输出"
+        },
+        "body": {
+          "en": "The following routes are implemented in the source. Choose the input that matches your task and keep the resulting artifact with your project.",
+          "zh": "以下路径已有源码实现。按任务选择输入，并把生成的结果与项目一起保存。"
+        },
+        "image": {
+          "light": "/assets/presentation/integrations-light.svg",
+          "dark": "/assets/presentation/integrations-dark.svg",
+          "alt": {
+            "en": "Connect the pieces",
+            "zh": "输入与输出"
+          }
+        }
+      }
+    ],
+    "details": [
+      {
+        "title": {
+          "en": "Configuration",
+          "zh": "配置"
+        },
+        "body": {
+          "en": "Use wrap(client) for a synchronous OpenAI client and awrap(client) for an async client. Configure the endpoint, model and credentials on the underlying client. Pure normalize_response and denormalize_request functions need no key.",
+          "zh": "同步 OpenAI 客户端使用 wrap(client)，异步客户端使用 awrap(client)。端点、模型和凭据在原客户端配置；纯函数 normalize_response 与 denormalize_request 无需密钥。"
+        }
+      },
+      {
+        "title": {
+          "en": "Further use",
+          "zh": "进一步使用"
+        },
+        "body": {
+          "en": "The CLI exposes the following operations. Commands after the example use your own paths or identifiers.",
+          "zh": "CLI 提供以下操作。示例之外的命令需要替换成你的文件路径或标识。"
+        },
+        "code": "# Offline before/after harness example:\n.venv/bin/python examples/openai_harness_demo.py"
+      }
+    ]
   }
 }

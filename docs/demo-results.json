@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "source_revision": "bb4ed2c73071d21319fa05f9334ad12e9f17754a",
+  "scope": "Synthetic native-object arguments converted through the production normalize_response function; no live GLM endpoint.",
+  "steps": [
+    {
+      "label": "Recorded run",
+      "body": "Synthetic native-object arguments converted through the production normalize_response function; no live GLM endpoint.",
+      "command": ".venv/bin/python examples/presentation-demo.py",
+      "output": "{\n  \"role\": \"assistant\",\n  \"tool_calls\": [\n    {\n      \"id\": \"call-1\",\n      \"type\": \"function\",\n      \"function\": {\n        \"name\": \"weather\",\n        \"arguments\": \"{\\\"city\\\":\\\"Beijing\\\"}\"\n      }\n    }\n  ],\n  \"content\": null,\n  \"_glm_reasoning\": \"Checking the city\"\n}"
+    }
+  ]
+}

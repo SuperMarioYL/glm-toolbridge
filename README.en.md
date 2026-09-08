@@ -1,154 +1,141 @@
-<div align="right"><sub><b>English</b>&nbsp;&nbsp;⇄&nbsp;&nbsp;<a href="./README.md">简体中文</a></sub></div>
+[简体中文](./README.md) · [Website](https://glm-toolbridge.lei6393.com/) · [GitHub](https://github.com/SuperMarioYL/glm-toolbridge)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./assets/hero-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="./assets/hero-light.svg">
-  <img src="./assets/hero-light.svg" width="880" alt="glm-toolbridge — the protocol adapter that makes GLM-5.2 tool calls parse in OpenAI-format coding agents">
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="./assets/presentation/hero-mobile-dark.svg">
+  <source media="(max-width: 600px)" srcset="./assets/presentation/hero-mobile-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/presentation/hero-dark.svg">
+  <img src="./assets/presentation/hero-light.svg" width="960" alt="Hero diagram">
 </picture>
 
-<p><sub>Run GLM-5.2 behind any OpenAI-format coding agent without tool calls silently mis-parsing — a thin protocol adapter that leaves your harness's OpenAI code path untouched.</sub></p>
+# glm-toolbridge
 
-<p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/SuperMarioYL/glm-toolbridge/releases"><img src="https://img.shields.io/github/v/release/SuperMarioYL/glm-toolbridge" alt="Release"></a>
-  <a href="https://github.com/SuperMarioYL/glm-toolbridge/actions/workflows/ci.yml"><img src="https://github.com/SuperMarioYL/glm-toolbridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/python-3.12%2B-3776AB.svg" alt="Python">
-  <img src="https://img.shields.io/badge/GLM--5.2-ready-10A37F.svg" alt="GLM-5.2 ready">
-  <img src="https://img.shields.io/badge/Coding%20Agent-drop--in-5E5CE6.svg" alt="Coding Agent drop-in">
-</p>
+**Make tool-call arguments match your harness.**
 
-**Point GLM-5.2 at a coding agent that hardcodes OpenAI `tool_calls` parsing and the tool loop silently mis-parses and stalls; `glm-toolbridge` slips one `wrap()` line in between so that loop just runs.**
+glm-toolbridge converts supported GLM-style tool-call shapes into the OpenAI-compatible structures expected by a Python harness.
 
-Developers increasingly run GLM-5.2 (智谱) as the backend behind a **Claude Code**-style harness or any other **Coding Agent** — but those harnesses assume the other end speaks OpenAI/Anthropic's function-call protocol. GLM-5.2's tool calls diverge from the OpenAI shape in four places (argument encoding, parallel-call framing, reasoning interleave, streaming assembly), so `json.loads(arguments)` throws, a non-null `content` gets treated as a final turn, and parallel calls fail to correlate by id — mostly **silently**. Tools like [farion1231/cc-switch](https://github.com/farion1231/cc-switch), built around swapping the model backend behind one harness, are turning this into a daily workflow, and the breakage bites the moment GLM is the backend. `glm-toolbridge` folds that divergence into a transparent proxy: your OpenAI code path is unchanged, and GLM's responses come back to the harness already in the valid OpenAI `tool_calls` shape.
+## Why use it
 
----
+A tool dispatcher may expect arguments as a JSON string while a response contains an object. Keep that protocol conversion in one adapter so the tool dispatcher can continue using its established input contract.
 
-<h2><img src="https://api.iconify.design/tabler:topology-star-3.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> Architecture</h2>
+- **One protocol boundary** — Conversion stays outside your tool dispatch code.
+- **Multiple calling modes** — Sync, async and stream adapters share normalization.
+- **Explicit failures** — Unsupported shapes produce named errors.
+
+## Architecture
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./assets/atlas-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="./assets/atlas-light.svg">
-  <img src="./assets/atlas-light.svg" width="880" alt="Data flow: OpenAI-format harness → glm-toolbridge adapter → GLM-5.2, denormalize outbound, normalize inbound">
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="./assets/presentation/architecture-mobile-dark.svg">
+  <source media="(max-width: 600px)" srcset="./assets/presentation/architecture-mobile-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/presentation/architecture-dark.svg">
+  <img src="./assets/presentation/architecture-light.svg" width="960" alt="Architecture diagram">
 </picture>
 
-A single-process Python library — no service, no daemon. `wrap(client)` returns a transparent proxy with the exact same interface as your client:
+Request denormalization prepares tool definitions. Response normalization handles supported argument encoding, parallel-call and reasoning differences. Client wrappers apply the transformations to sync, async and streamed results, while explicit errors identify unsupported shapes.
 
-- **Outbound** `denormalize_request(tools)` — lowers OpenAI-shaped tool definitions into the request body GLM-5.2 accepts;
-- **Inbound** `normalize_response()` — restores GLM's response into the OpenAI `tool_calls` shape the harness expects;
-- On any shape no documented delta covers, it raises a **named, explicit error** (`UnsupportedProtocolShape` / `MalformedToolArguments` / `StreamAssemblyError`) instead of returning a half-parsed structure that breaks the harness three frames later — the opposite of today's silent mis-parsing.
+| Component | Responsibility |
+| --- | --- |
+| `Client wrapper` | src/glm_toolbridge/client.py |
+| `Request adapter` | adapter.py |
+| `Normalize / assemble` | normalize.py |
+| `Typed result` | OpenAI-compatible response |
 
-<h2><img src="https://api.iconify.design/tabler:download.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> Install</h2>
+## Install and quickstart
 
-```bash
-uv add glm-toolbridge        # or: pip install glm-toolbridge
-```
-
-<h2><img src="https://api.iconify.design/tabler:rocket.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> Quickstart</h2>
-
-Cold clone to first visible result in three commands:
+Build with the version declared in the repository manifest. Run the example from the repository root.
 
 ```bash
-git clone https://github.com/SuperMarioYL/glm-toolbridge && cd glm-toolbridge
-uv sync
-uv run python examples/openai_harness_demo.py
+git clone https://github.com/SuperMarioYL/glm-toolbridge.git
+cd glm-toolbridge
+uv venv .venv
+uv pip install --python .venv/bin/python -e .
+source .venv/bin/activate
 ```
 
-<details>
-<summary>sample output</summary>
+The included Python script defines a complete response with object arguments and prints the normalized message.
+
+```bash
+.venv/bin/python examples/presentation-demo.py
+```
+
+## Recorded demo
+
+<picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="./assets/presentation/process-mobile-dark.svg">
+  <source media="(max-width: 600px)" srcset="./assets/presentation/process-mobile-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/presentation/process-dark.svg">
+  <img src="./assets/presentation/process-light.svg" width="960" alt="Process diagram">
+</picture>
+
+The weather call arguments become a JSON string while the call ID and function name remain available.
 
 ```text
-================================================================
-  glm-toolbridge demo — same OpenAI harness, GLM-5.2 backend
-================================================================
-
-[LEFT] stock harness against raw GLM-5.2 ...
-  ✗ tool loop broke: TypeError: the JSON object must be str, bytes or bytearray, not dict
-    (GLM sent arguments as a native object; json.loads chokes — the silent breakage devs hit today.)
-
-[RIGHT] same harness, one-line wrap: client = wrap(client) ...
-  ✓ tool loop completed: Beijing: 21 celsius, clear
-    (arguments normalized to a JSON string, content forced null, reasoning relocated — the harness never knew GLM was behind it.)
+{
+  "role": "assistant",
+  "tool_calls": [
+    {
+      "id": "call-1",
+      "type": "function",
+      "function": {
+        "name": "weather",
+        "arguments": "{\"city\":\"Beijing\"}"
+      }
+    }
+  ],
+  "content": null,
+  "_glm_reasoning": "Checking the city"
+}
 ```
 
-</details>
+The complete command and output are recorded in [docs/demo-results.json](./docs/demo-results.json). Inputs and reproduction code are included in the repository.
 
-<h2><img src="https://api.iconify.design/tabler:terminal-2.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> Usage</h2>
+![Existing terminal recording](./assets/demo.gif)
 
-`glm-toolbridge` exposes three layers; reach for whichever you need. A full runnable example lives in [`examples/openai_harness_demo.py`](examples/openai_harness_demo.py).
+The existing recording is retained for context; the text example above documents the reproducible scenario.
 
-### 1. One-line drop-in (recommended)
+## Usage
 
-Wrap your existing OpenAI-SDK client; everything downstream stays the same:
+The CLI exposes the following operations. Commands after the example use your own paths or identifiers.
+
+```bash
+# Offline before/after harness example:
+.venv/bin/python examples/openai_harness_demo.py
+```
+
+## Configuration
+
+Use wrap(client) for a synchronous OpenAI client and awrap(client) for an async client. Configure the endpoint, model and credentials on the underlying client. Pure normalize_response and denormalize_request functions need no key.
 
 ```python
-from openai import OpenAI
-from glm_toolbridge import wrap, GLM_DEFAULT_BASE_URL
-
-client = wrap(OpenAI(base_url=GLM_DEFAULT_BASE_URL, api_key="your-zhipu-key"))
-
-resp = client.chat.completions.create(
-    model="glm-5.2",
-    messages=[{"role": "user", "content": "weather in Beijing?"}],
-    tools=[...],   # your existing OpenAI-shaped tool definitions
-)
-resp.choices[0].message.tool_calls   # already valid OpenAI shape
+from glm_toolbridge import normalize_response
+raw = {"choices": [{"index": 0, "message": {"role": "assistant", "tool_calls": [{"id": "call-1", "type": "function", "function": {"name": "weather", "arguments": {"city": "Beijing"}}}]}, "finish_reason": "tool_calls"}]}
+normalized = normalize_response(raw).as_openai_dict()
 ```
 
-### 2. Pure transforms (no client wrapping)
+## Integrations and responsibilities
 
-Operate directly on the wire-shape dicts — ideal for harnesses that own their request/response loop:
+<picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="./assets/presentation/integrations-mobile-dark.svg">
+  <source media="(max-width: 600px)" srcset="./assets/presentation/integrations-mobile-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/presentation/integrations-dark.svg">
+  <img src="./assets/presentation/integrations-light.svg" width="960" alt="Integrations diagram">
+</picture>
 
-```python
-from glm_toolbridge import normalize_response, denormalize_request
+The following routes are implemented in the source. Choose the input that matches your task and keep the resulting artifact with your project.
 
-glm_kwargs = denormalize_request(openai_request)   # OpenAI tool defs → GLM request body
-result = normalize_response(glm_raw_response)       # GLM response → OpenAI shape
-result.completion.tool_calls          # pydantic-validated typed view
-result.as_openai_dict()               # the plain dict the harness consumes
-result.deltas_applied                 # which deltas actually fired this time
-```
+| Route | Implemented role |
+| --- | --- |
+| wrap / awrap | Synchronous and asynchronous clients |
+| Response dictionaries | Pure normalization functions |
+| Stream chunks | Delta normalization and assembly |
+| Protocol errors | Named unsupported-shape failures |
 
-For streamed responses, hand the list of chunks to `assemble_stream()` (or pass the chunk list straight to `normalize_response()`) to reassemble one complete call first, then transform as above.
+## Limits and next steps
 
-### 3. Protocol audit (see exactly what differs)
+- The demo uses a synthetic response. It does not establish the behavior of any current GLM deployment or compatibility with every agent harness.
+- Only the supported OpenAI-style contract is adapted; Anthropic Messages is outside the current adapter.
 
-All four deltas are executable detectors you can query individually:
+Expand the supported delta set only from reproducible response examples. Additional model protocols and Anthropic Messages remain future work.
 
-```python
-from glm_toolbridge import DELTAS, deltas_present
+## License and contributions
 
-for d in DELTAS:
-    print(d.kind.value, "—", d.summary)
-
-deltas_present(glm_raw_response)   # → [DeltaKind.ARG_ENCODING, DeltaKind.REASONING_INTERLEAVE, ...]
-```
-
-The full divergence table is in [`docs/PROTOCOL_DELTAS.md`](docs/PROTOCOL_DELTAS.md).
-
-<h2><img src="https://api.iconify.design/tabler:photo.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> Demo</h2>
-
-![demo](assets/demo.gif)
-
-The same OpenAI-format harness: on the left it talks to GLM-5.2 directly and the tool loop silently stalls; on the right one extra `wrap()` line makes the identical tool call parse and the loop complete.
-
-<h2><img src="https://api.iconify.design/tabler:map-2.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> Roadmap</h2>
-
-- [x] **m1 protocol audit** — the four GLM-5.2 vs OpenAI tool-call deltas captured in `docs/PROTOCOL_DELTAS.md` with fixtures, each backed by an executable detector
-- [x] **m2 bidirectional adapter** — `normalize()` / `denormalize()` pass roundtrip tests across all four divergence fixtures
-- [x] **m3 drop-in wrapper** — `wrap()` transparently adapts an OpenAI-SDK client; `examples/` shows fail-without / work-with
-- [x] **v0.2.0 streaming drop-in** — `wrap()` no longer silently drops `stream=True`; it yields normalized incremental delta chunks (argument fragments coerced to JSON strings without per-fragment validation, reasoning relocated, parallel framing flattened) following the OpenAI streaming contract, and `assemble_stream` now reassembles every choice (n>1)
-- [x] **v0.2.0 async client** — `awrap()` adapts `AsyncOpenAI`; `await create(...)` returns a normalized completion and `stream=True` returns an async iterator of normalized chunks; no new third-party deps
-- [x] **v0.2.0 louder errors** — `_rebuild_like` no longer swallows SDK `model_validate` failures (now raises `UnsupportedProtocolShape`); `denormalize_tools` rejects non-object `parameters` loudly
-- [ ] Cover more GLM-5.2 tool-call edge cases (add deltas as real issues surface them)
-- [ ] Anthropic Messages-format adaptation (today: OpenAI `tool_calls` only)
-- [ ] Possibly extend to other Chinese model protocols — only if demand shows; depth over breadth
-
-> Out of scope for v0.2: web UI / dashboard, adapters for other models (Qwen / Kimi / DeepSeek / 豆包 / MiniMax), our own coding agent, a hosted service / billing, fine-tuning.
-
-<h2><img src="https://api.iconify.design/tabler:license.svg?color=%230071E3&width=24" height="22" align="absmiddle" alt=""> License & Contributing</h2>
-
-Apache 2.0 licensed — see [LICENSE](./LICENSE). Issues and PRs welcome — especially if you hit a GLM-5.2 tool-call shape no current delta covers: paste the response into an issue and we'll add a delta.
-
----
-
-<p align="center"><sub><a href="./LICENSE">Apache 2.0</a> © 2026 SuperMarioYL</sub></p>
+See [LICENSE](./LICENSE). When reporting an issue, include a minimal input, the command, and the observed output.

@@ -1,0 +1,78 @@
+{
+  "name": "glm-toolbridge",
+  "tagline": "Make tool-call arguments match your harness.",
+  "architecture": {
+    "title": "How glm-toolbridge works",
+    "nodes": [
+      {
+        "title": "Client wrapper",
+        "detail": "src/glm_toolbridge/client.py"
+      },
+      {
+        "title": "Request adapter",
+        "detail": "adapter.py"
+      },
+      {
+        "title": "Normalize / assemble",
+        "detail": "normalize.py"
+      },
+      {
+        "title": "Typed result",
+        "detail": "OpenAI-compatible response"
+      }
+    ],
+    "edges": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ]
+    ]
+  },
+  "process": {
+    "title": "From input to a useful result",
+    "steps": [
+      {
+        "title": "Read response",
+        "detail": "Explicit object arguments"
+      },
+      {
+        "title": "Normalize",
+        "detail": "Serialize supported fields"
+      },
+      {
+        "title": "Return message",
+        "detail": "OpenAI tool-call structure"
+      }
+    ],
+    "result": "The weather call arguments become a JSON string while the call ID and function name remain available."
+  },
+  "integrations": {
+    "title": "Supported input and output routes",
+    "items": [
+      {
+        "title": "wrap / awrap",
+        "detail": "Synchronous and asynchronous clients"
+      },
+      {
+        "title": "Response dictionaries",
+        "detail": "Pure normalization functions"
+      },
+      {
+        "title": "Stream chunks",
+        "detail": "Delta normalization and assembly"
+      },
+      {
+        "title": "Protocol errors",
+        "detail": "Named unsupported-shape failures"
+      }
+    ]
+  }
+}
