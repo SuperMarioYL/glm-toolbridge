@@ -207,5 +207,6 @@
         "code": "# Offline before/after harness example:\n.venv/bin/python examples/openai_harness_demo.py"
       }
     ]
-  }
+  },
+  "content_version": "0.5.0"
 }
