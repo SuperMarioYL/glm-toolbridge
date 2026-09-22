@@ -300,3 +300,130 @@ def test_assemble_stream_relabels_object_as_completion(samples):
     result = normalize_response(chunks)
     assert result.completion.object == "chat.completion"
     assert result.as_openai_dict()["object"] == "chat.completion"
+
+
+def test_non_list_tool_calls_envelope_raises_loudly():
+    """fix-non-list-call-envelope-silent-drop: a message whose tool_calls (or
+    parallel_tool_calls) is present but NOT a list must raise
+    UnsupportedProtocolShape carrying the fragment — normalize() used to treat
+    the truthy non-list envelope as has_calls, then silently replace the calls
+    with [] and force finish_reason="tool_calls", discarding the call data."""
+    from glm_toolbridge.errors import UnsupportedProtocolShape
+
+    bad_dict_envelope = {
+        "object": "chat.completion",
+        "model": "glm-5.2",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    # dict instead of the expected list
+                    "tool_calls": {
+                        "function": {"name": "read_file", "arguments": {"path": "a.txt"}}
+                    },
+                },
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    with pytest.raises(UnsupportedProtocolShape) as exc:
+        normalize_response(bad_dict_envelope)
+    assert exc.value.fragment is not None
+
+    bad_parallel_envelope = {
+        "object": "chat.completion",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "parallel_tool_calls": "not-a-list",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    with pytest.raises(UnsupportedProtocolShape):
+        normalize_response(bad_parallel_envelope)
+
+
+def test_list_and_null_envelopes_stay_quiet():
+    """The guard must not fire on the shapes that were always valid: a proper
+    list envelope, and an explicit null (serialized 'absent') envelope."""
+    ok = {
+        "object": "chat.completion",
+        "model": "glm-5.2",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": None,  # explicit null == absent
+                    "parallel_tool_calls": [
+                        {"function": {"name": "noop", "arguments": {}}}
+                    ],
+                },
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    result = normalize_response(ok)
+    _assert_valid_openai(result)
+    assert [c.function.name for c in result.completion.tool_calls] == ["noop"]
+
+
+def test_non_dict_stream_chunk_raises_stream_assembly_error():
+    """fix-assemble-stream-malformed-chunk: a chunk list containing a non-dict
+    must raise StreamAssemblyError naming the offending position — the assembly
+    loop used to call chunk.get(...) unguarded and leak a raw AttributeError
+    that escapes the ToolBridgeError hierarchy."""
+    from glm_toolbridge.errors import StreamAssemblyError
+
+    with pytest.raises(StreamAssemblyError) as exc:
+        normalize_response([None])
+    assert "index 0" in str(exc.value)
+
+    with pytest.raises(StreamAssemblyError):
+        normalize_response(
+            [
+                {
+                    "object": "chat.completion.chunk",
+                    "choices": [
+                        {"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}
+                    ],
+                },
+                "not-a-chunk",
+            ]
+        )
+
+
+def test_typed_revalidation_failure_raises_unsupported_protocol_shape():
+    """fix-normalize-response-named-validation-error: a shape normalize()
+    passes through but the typed OpenAIChatCompletion model rejects (e.g.
+    message.content as a list of content parts) must raise
+    UnsupportedProtocolShape — not a raw pydantic ValidationError that escapes
+    the documented ``except ToolBridgeError`` contract."""
+    from glm_toolbridge.errors import ToolBridgeError, UnsupportedProtocolShape
+
+    resp = {
+        "object": "chat.completion",
+        "model": "glm-5.2",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "hello"}],
+                },
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    with pytest.raises(UnsupportedProtocolShape) as exc:
+        normalize_response(resp)
+    assert isinstance(exc.value, ToolBridgeError)
+    assert "OpenAIChatCompletion" in str(exc.value)

@@ -143,9 +143,23 @@ def _collect_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
     """Flatten GLM's parallel-call framing into one OpenAI tool_calls array."""
     raw_calls: list[Any] = []
     envelope = message.get("parallel_tool_calls")
+    if envelope is not None and not isinstance(envelope, list):
+        # A present-but-non-list envelope (e.g. a bare call object) must fail
+        # loudly: normalize() would otherwise treat it as has_calls, replace the
+        # calls with [] and force finish_reason="tool_calls" — silently
+        # discarding the call data the harness was about to dispatch.
+        raise UnsupportedProtocolShape(
+            "message.parallel_tool_calls is present but is not a list",
+            fragment=envelope,
+        )
     if isinstance(envelope, list):
         raw_calls.extend(envelope)
     flat = message.get("tool_calls")
+    if flat is not None and not isinstance(flat, list):
+        raise UnsupportedProtocolShape(
+            "message.tool_calls is present but is not a list",
+            fragment=flat,
+        )
     if isinstance(flat, list):
         raw_calls.extend(flat)
     return [_normalize_one_call(c, index=i) for i, c in enumerate(raw_calls)]
@@ -169,6 +183,16 @@ def assemble_stream(chunks: list[dict[str, Any]]) -> dict[str, Any]:
     """
     if not chunks:
         raise StreamAssemblyError("cannot assemble an empty stream")
+
+    # Every chunk must be an object before assembly touches it: the loop below
+    # calls chunk.get(...) unguarded, and a None/str chunk would leak a raw
+    # AttributeError that escapes the ToolBridgeError hierarchy (normalize and
+    # normalize_delta_chunk guard the same input shape with a named error).
+    for i, chunk in enumerate(chunks):
+        if not isinstance(chunk, dict):
+            raise StreamAssemblyError(
+                f"stream chunk at index {i} is not an object"
+            )
 
     # Per-choice assembled state, keyed by the choice index (default 0 for
     # chunks that omit it, matching the OpenAI single-choice convention).
@@ -266,8 +290,6 @@ def assemble_stream(chunks: list[dict[str, Any]]) -> dict[str, Any]:
     # so a head seeded from ``chunks[0]`` would silently drop it. Carry any
     # non-choices top-level field from the chunk that carries it into head.
     for chunk in chunks:
-        if not isinstance(chunk, dict):
-            continue
         for key, value in chunk.items():
             if key == "choices":
                 continue

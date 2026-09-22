@@ -20,9 +20,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import normalize as _norm
+from .errors import UnsupportedProtocolShape
 from .protocol import DeltaKind, deltas_present
 
 
@@ -120,7 +121,18 @@ def normalize_response(
             applied.append(kind)
 
     normalized = _norm.normalize(source)
-    completion = OpenAIChatCompletion.model_validate(normalized)
+    try:
+        completion = OpenAIChatCompletion.model_validate(normalized)
+    except ValidationError as exc:
+        # The typed gate is the adapter's own re-validation: a shape normalize()
+        # passes through but the model rejects (e.g. content as a list of
+        # content parts) must surface as a named ToolBridgeError, mirroring
+        # client._rebuild_like — never a raw pydantic error.
+        raise UnsupportedProtocolShape(
+            f"normalized response failed typed re-validation as "
+            f"OpenAIChatCompletion: {exc}",
+            fragment=normalized,
+        ) from exc
     return NormalizeResult(completion=completion, raw=normalized, deltas_applied=applied)
 
 
