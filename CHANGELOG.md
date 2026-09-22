@@ -4,6 +4,41 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-22
+
+### Fixed
+- **Raise a named error when the tool-call envelope is present but not a
+  list.** `_collect_calls` only read envelopes that passed
+  `isinstance(..., list)`, while `normalize()` treated any truthy
+  `tool_calls`/`parallel_tool_calls` value as "has calls": a
+  present-but-non-list envelope (e.g. a bare call object) was silently
+  replaced with an empty `tool_calls` array and `finish_reason` forced to
+  `"tool_calls"` — the call data was discarded without a sound. Such an
+  envelope now raises `UnsupportedProtocolShape` naming the field and
+  carrying the offending fragment; list envelopes and explicit nulls behave
+  exactly as before.
+- **Reject non-dict stream chunks with `StreamAssemblyError`.**
+  `assemble_stream` called `chunk.get(...)` unguarded, so a chunk list
+  containing a non-dict (a `None` from a provider hiccup, a stray string)
+  leaked a raw `AttributeError` that escapes the `ToolBridgeError` hierarchy.
+  Chunks are now validated up front and a malformed one raises
+  `StreamAssemblyError` naming the offending index — the same named-error
+  treatment `normalize` and `normalize_delta_chunk` already apply to their
+  inputs.
+- **Surface typed re-validation failures as `UnsupportedProtocolShape`.**
+  `normalize_response` ended in an unguarded
+  `OpenAIChatCompletion.model_validate(...)`, so a shape the pure transform
+  passes through but the typed model rejects (e.g. `message.content` as a
+  list of content parts) leaked a raw pydantic `ValidationError` — invisible
+  to a caller following the documented `except ToolBridgeError` contract.
+  The adapter's gate now wraps the failure in `UnsupportedProtocolShape`,
+  mirroring `client._rebuild_like`.
+
+### Changed
+- Version bumped to 0.6.0 in `pyproject.toml`, `VERSION`,
+  `glm_toolbridge.__version__`, `web/site.json` `content_version`, and this
+  changelog.
+
 ## [0.5.0] - 2026-09-07
 
 ### Fixed

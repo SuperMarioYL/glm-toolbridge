@@ -3,7 +3,8 @@
 Asserts every user-facing version surface agrees. On the shipped v0.4.0 tag
 this fails: web/site.json carried NO content_version field, so the
 content_version == VERSION assertion raised a KeyError — proving the drift
-was real. After the v0.5.0 bump all surfaces read 0.5.0.
+was real. After the v0.5.0 bump all surfaces read 0.5.0; the v0.6.0 bump
+updates the same five surfaces.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from pathlib import Path
 import glm_toolbridge
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_TARGET = "0.5.0"
+_TARGET = "0.6.0"
 
 
 def _read_version_file() -> str:
