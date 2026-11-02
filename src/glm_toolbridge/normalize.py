@@ -216,14 +216,42 @@ def assemble_stream(chunks: list[dict[str, Any]]) -> dict[str, Any]:
             })
             if choice.get("finish_reason"):
                 st["finish_reason"] = choice["finish_reason"]
-            delta = choice.get("delta") or {}
+            delta = choice.get("delta")
+            if delta is None:
+                delta = {}
+            if not isinstance(delta, dict):
+                # A truthy non-object delta would leak a raw AttributeError from
+                # delta.get(...) below, escaping the ToolBridgeError hierarchy.
+                raise StreamAssemblyError(
+                    f"streamed choice at index {cidx} has a non-object delta"
+                )
             if delta.get("role"):
                 st["role"] = delta["role"]
             if delta.get("content"):
                 st["content_parts"].append(delta["content"])
             if delta.get("reasoning_content"):
                 st["reasoning_parts"].append(delta["reasoning_content"])
-            for frag in delta.get("tool_calls") or []:
+            raw_frags = delta.get("tool_calls")
+            parallel = delta.get("parallel_tool_calls")
+            if raw_frags is not None and not isinstance(raw_frags, list):
+                raise StreamAssemblyError(
+                    f"streamed choice at index {cidx} has a non-list tool_calls"
+                )
+            if parallel is not None and not isinstance(parallel, list):
+                raise StreamAssemblyError(
+                    f"streamed choice at index {cidx} has a non-list "
+                    "parallel_tool_calls"
+                )
+            # GLM may frame a streamed call under the parallel_tool_calls
+            # envelope (docs/PROTOCOL_DELTAS.md, Delta 2). Reading only
+            # tool_calls would drop those calls silently; merge both framings,
+            # flat array first, matching normalize_delta_chunk's order.
+            frags: list[Any] = []
+            if isinstance(raw_frags, list):
+                frags.extend(raw_frags)
+            if isinstance(parallel, list):
+                frags.extend(parallel)
+            for frag in frags:
                 fidx = frag.get("index") if isinstance(frag, dict) else None
                 if fidx is None:
                     raise StreamAssemblyError(
@@ -342,6 +370,14 @@ def normalize_delta_chunk(chunk: dict[str, Any]) -> dict[str, Any]:
 
         # Flatten a parallel_tool_calls envelope on a delta into the flat array.
         parallel = delta.pop("parallel_tool_calls", None)
+        if parallel is not None and not isinstance(parallel, list):
+            # Dropping a present-but-non-list envelope would silently lose the
+            # call(s) it carries; the non-streaming _collect_calls raises for
+            # the identical shape, so mirror it here.
+            raise UnsupportedProtocolShape(
+                "delta.parallel_tool_calls is present but is not a list",
+                fragment=parallel,
+            )
         if isinstance(parallel, list):
             merged = list(delta.get("tool_calls") or [])
             for frag in parallel:
@@ -385,11 +421,26 @@ def normalize(glm_response: dict[str, Any]) -> dict[str, Any]:
 
     out = copy.deepcopy(glm_response)
     choices = out.get("choices")
-    if not isinstance(choices, list) or not choices:
+    if choices is None:
         # No choices to touch (e.g. an error envelope) — pass through unchanged.
         return out
+    if not isinstance(choices, list):
+        # Present but not a list: pass-through would hand the harness a mapping
+        # where it expects an array. Fail loudly instead of pretending the
+        # response was normalized.
+        raise UnsupportedProtocolShape(
+            "response.choices is present but is not a list", fragment=choices
+        )
+    if not choices:
+        return out
 
-    for choice in choices:
+    for i, choice in enumerate(choices):
+        if not isinstance(choice, dict):
+            # The loop below reads choice["message"]; a non-object choice would
+            # leak a raw AttributeError past the ToolBridgeError hierarchy.
+            raise UnsupportedProtocolShape(
+                f"choices[{i}] is not an object", fragment=choice
+            )
         message = choice.get("message")
         if not isinstance(message, dict):
             continue

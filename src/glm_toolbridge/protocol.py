@@ -71,14 +71,32 @@ class ProtocolDelta:
 # Detection helpers — each isolates the divergence on one axis.               #
 # --------------------------------------------------------------------------- #
 
+def _first_message(response: dict[str, Any]) -> dict[str, Any] | None:
+    """The first choice's message object, or None when the shape is unusable.
+
+    Detection is documented to be conservative (return False, never raise), so
+    every level of the choices/message envelope is type-checked here rather than
+    letting a malformed nested value leak a raw AttributeError.
+    """
+    choices = response.get("choices") or []
+    if not isinstance(choices, list) or not choices:
+        return None
+    first = choices[0]
+    if not isinstance(first, dict):
+        return None
+    message = first.get("message")
+    return message if isinstance(message, dict) else None
+
+
 def _iter_tool_calls(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Pull the raw tool-call list out of a GLM-shaped response, if any."""
-    choices = response.get("choices") or []
-    if not choices:
+    message = _first_message(response)
+    if message is None:
         return []
-    message = choices[0].get("message") or {}
     calls = message.get("tool_calls")
-    return list(calls) if isinstance(calls, list) else []
+    if not isinstance(calls, list):
+        return []
+    return [call for call in calls if isinstance(call, dict)]
 
 
 def _detect_arg_encoding(response: dict[str, Any]) -> bool:
@@ -89,7 +107,9 @@ def _detect_arg_encoding(response: dict[str, Any]) -> bool:
     non-``str``), or a string that is not itself valid JSON.
     """
     for call in _iter_tool_calls(response):
-        fn = call.get("function") or {}
+        fn = call.get("function")
+        if not isinstance(fn, dict):
+            continue
         args = fn.get("arguments")
         if args is None:
             continue
@@ -110,11 +130,9 @@ def _detect_parallel_calls(response: dict[str, Any]) -> bool:
     ``parallel_tool_calls`` envelope or as array entries that lack the per-call
     ``id``/``type`` scaffolding OpenAI guarantees. Either framing is divergent.
     """
-    choices = response.get("choices") or []
-    if choices:
-        message = choices[0].get("message") or {}
-        if isinstance(message.get("parallel_tool_calls"), list):
-            return True
+    message = _first_message(response)
+    if message is not None and isinstance(message.get("parallel_tool_calls"), list):
+        return True
     calls = _iter_tool_calls(response)
     if len(calls) > 1:
         # Multiple calls present: divergent if any lacks the OpenAI scaffolding.
@@ -132,10 +150,9 @@ def _detect_reasoning_interleave(response: dict[str, Any]) -> bool:
     carry no reasoning field, so its presence is the divergence — the harness
     expects ``content`` to be ``null`` when ``tool_calls`` is set.
     """
-    choices = response.get("choices") or []
-    if not choices:
+    message = _first_message(response)
+    if message is None:
         return False
-    message = choices[0].get("message") or {}
     if message.get("reasoning_content"):
         return True
     # Reasoning spliced into content while a call is present. Use the same
@@ -161,10 +178,19 @@ def _detect_streaming_assembly(response: dict[str, Any]) -> bool:
     divergence the assembler must handle.
     """
     choices = response.get("choices") or []
-    if not choices:
+    if not isinstance(choices, list) or not choices:
         return False
-    delta = choices[0].get("delta")
-    if isinstance(delta, dict) and isinstance(delta.get("tool_calls"), list):
+    first = choices[0]
+    if not isinstance(first, dict):
+        return False
+    delta = first.get("delta")
+    if not isinstance(delta, dict):
+        return False
+    if isinstance(delta.get("tool_calls"), list):
+        return True
+    # The parallel-call envelope can also arrive on a streamed delta; it is the
+    # same streaming-assembly divergence and must not go unreported.
+    if isinstance(delta.get("parallel_tool_calls"), list):
         return True
     return False
 

@@ -427,3 +427,156 @@ def test_typed_revalidation_failure_raises_unsupported_protocol_shape():
         normalize_response(resp)
     assert isinstance(exc.value, ToolBridgeError)
     assert "OpenAIChatCompletion" in str(exc.value)
+
+
+# --------------------------------------------------------------------------- #
+# v0.7.0 — nested envelope type guards                                        #
+# --------------------------------------------------------------------------- #
+
+def test_non_object_choice_raises_named_error():
+    """fix-nested-envelope-type-guard: a non-object entry in choices used to
+    leak a raw AttributeError ('str' has no attribute 'get') from
+    normalize()/deltas_present, escaping the ToolBridgeError hierarchy."""
+    from glm_toolbridge.errors import UnsupportedProtocolShape
+
+    with pytest.raises(UnsupportedProtocolShape) as exc:
+        normalize_response({"object": "chat.completion", "choices": ["oops"]})
+    assert "choices[0]" in str(exc.value)
+
+
+def test_present_non_list_choices_raises_named_error():
+    """A choices value that is present but not a list is malformed; absent/null
+    and an empty list keep their documented pass-through."""
+    from glm_toolbridge import normalize
+    from glm_toolbridge.errors import UnsupportedProtocolShape
+
+    with pytest.raises(UnsupportedProtocolShape):
+        normalize({"object": "chat.completion", "choices": {"0": {}}})
+
+    assert normalize({"error": {"message": "rate limited"}}).get("error")
+    assert normalize({"object": "chat.completion", "choices": []}) == {
+        "object": "chat.completion",
+        "choices": [],
+    }
+
+
+def test_deltas_present_tolerates_malformed_nested_shapes():
+    """The detectors document that they return False rather than raise on
+    shapes they do not recognize: a malformed nested envelope must not mask the
+    other deltas (or crash the audit that runs before normalize)."""
+    from glm_toolbridge import deltas_present
+
+    assert deltas_present({"choices": ["oops"]}) == []
+    assert deltas_present({"choices": [{"message": "oops"}]}) == []
+    assert deltas_present({"choices": [{"message": {"tool_calls": ["oops"]}}]}) == []
+    assert (
+        deltas_present({"choices": [{"message": {"tool_calls": [{"function": "x"}]}}]})
+        == []
+    )
+
+
+def test_non_object_stream_delta_raises_stream_assembly_error():
+    """fix-assemble-stream-non-dict-delta: a truthy non-object delta used to
+    leak a raw AttributeError from delta.get(...)."""
+    from glm_toolbridge.errors import StreamAssemblyError
+    from glm_toolbridge.normalize import assemble_stream
+
+    with pytest.raises(StreamAssemblyError) as exc:
+        assemble_stream([{"choices": [{"index": 0, "delta": "oops"}]}])
+    assert "non-object delta" in str(exc.value)
+
+
+def test_assemble_stream_flattens_parallel_envelope():
+    """fix-stream-parallel-envelope-types: a streamed parallel_tool_calls
+    envelope used to be ignored by assemble_stream, silently dropping every
+    call it carried."""
+    from glm_toolbridge.normalize import assemble_stream
+
+    chunks = [
+        {
+            "object": "chat.completion.chunk",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {
+                        "role": "assistant",
+                        "parallel_tool_calls": [
+                            {"index": 0, "id": "c1",
+                             "function": {"name": "list_dir", "arguments": {"path": "."}}},
+                            {"index": 1, "id": "c2",
+                             "function": {"name": "grep", "arguments": {"pattern": "TODO"}}},
+                        ],
+                    },
+                }
+            ],
+        }
+    ]
+    result = normalize_response(chunks)
+    _assert_valid_openai(result)
+    calls = result.completion.tool_calls
+    assert [c.function.name for c in calls] == ["list_dir", "grep"]
+    assert [c.id for c in calls] == ["c1", "c2"]
+    assert json.loads(calls[0].function.arguments) == {"path": "."}
+    assert result.completion.choices[0].finish_reason == "tool_calls"
+
+
+def test_assemble_stream_rejects_non_list_parallel_envelope():
+    from glm_toolbridge.errors import StreamAssemblyError
+
+    with pytest.raises(StreamAssemblyError) as exc:
+        normalize_response(
+            [
+                {
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "parallel_tool_calls": {
+                                    "id": "c1",
+                                    "function": {"name": "f", "arguments": "{}"},
+                                }
+                            },
+                        }
+                    ]
+                }
+            ]
+        )
+    assert "parallel_tool_calls" in str(exc.value)
+
+
+def test_normalize_delta_chunk_rejects_non_list_parallel_envelope():
+    """The per-chunk path used to pop and discard a non-list envelope without a
+    sound, even though the non-streaming _collect_calls raises for the same
+    shape."""
+    from glm_toolbridge.errors import UnsupportedProtocolShape
+    from glm_toolbridge.normalize import normalize_delta_chunk
+
+    with pytest.raises(UnsupportedProtocolShape) as exc:
+        normalize_delta_chunk(
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "parallel_tool_calls": {
+                                "id": "c1",
+                                "function": {"name": "f", "arguments": "{}"},
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+    assert exc.value.fragment is not None
+
+
+def test_streaming_assembly_detected_for_parallel_envelope_delta():
+    """deltas_applied must record the streaming-assembly divergence when a delta
+    carries the parallel envelope (the branch assemble_stream now fixes)."""
+    from glm_toolbridge import DeltaKind, deltas_present
+
+    response = {
+        "choices": [
+            {"index": 0, "delta": {"parallel_tool_calls": [{"index": 0}]}}
+        ]
+    }
+    assert DeltaKind.STREAMING_ASSEMBLY in deltas_present(response)

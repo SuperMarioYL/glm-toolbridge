@@ -94,7 +94,7 @@ The existing recording is retained for context; the text example above documents
 
 ## Usage
 
-The CLI exposes the following operations. Commands after the example use your own paths or identifiers.
+The library ships no console-script entry point; the bundled example below is the reference usage. Replace the paths or identifiers with your own.
 
 ```bash
 # Offline before/after harness example:

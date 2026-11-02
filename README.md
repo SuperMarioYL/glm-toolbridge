@@ -94,7 +94,7 @@ The weather call arguments become a JSON string while the call ID and function n
 
 ## 用法
 
-CLI 提供以下操作。示例之外的命令需要替换成你的文件路径或标识。
+本库不提供命令行入口；下方随仓示例即参考用法，命令可按需替换为你的文件路径或标识。
 
 ```bash
 # Offline before/after harness example:

@@ -24,8 +24,8 @@ from .adapter import denormalize_request, normalize_response
 from .errors import UnsupportedProtocolShape
 from .normalize import normalize_delta_chunk
 
-# Default 智谱 GLM OpenAI-compatible base URL. Override via wrap(..., base_url=...)
-# or by constructing the underlying client with your own base_url.
+# Default 智谱 GLM OpenAI-compatible base URL. Pass it (or your own) as base_url
+# when constructing the underlying client; wrap() takes only that client.
 GLM_DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 
 

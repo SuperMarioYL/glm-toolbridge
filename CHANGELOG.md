@@ -4,6 +4,55 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-03
+
+### Fixed
+- **Raise named errors for malformed nested response envelopes.**
+  `normalize()` assumed every `choices` entry was an object, and the four
+  detectors in `protocol.py` assumed `choices[0]` and its `message` were
+  objects. A response carrying a non-object choice (or a non-object
+  message/call) therefore leaked a raw `AttributeError: 'str' object has no
+  attribute 'get'` out of `deltas_present`/`normalize` instead of a named
+  `ToolBridgeError` — the same crash-on-bad-input class v0.5.0 and v0.6.0
+  removed one level up. Detectors now return `False` for shapes they cannot
+  recognize (their documented contract), and `normalize()` raises
+  `UnsupportedProtocolShape` with the index and offending fragment for a
+  present non-list `choices` or a non-object choice. Absent/null `choices`
+  and an empty list keep their documented pass-through.
+- **Reject a non-object streamed `delta` with `StreamAssemblyError`.**
+  `assemble_stream` used `choice.get("delta") or {}` and then called
+  `delta.get(...)`, so a truthy non-object delta (a string or list from a
+  malformed provider frame) leaked a raw `AttributeError`. It now treats an
+  absent/null delta as the empty default and raises `StreamAssemblyError`
+  naming the choice index for a present non-object delta, matching the
+  function's existing named-error treatment of non-object chunks and choices.
+- **Stop dropping the streamed `parallel_tool_calls` envelope.**
+  `assemble_stream` read only `delta["tool_calls"]`, so a streamed chunk that
+  framed its calls under GLM's documented `parallel_tool_calls` envelope lost
+  every call silently (the reassembled turn came back with no `tool_calls` and
+  `finish_reason: "stop"`). It now merges a list-valued envelope into the
+  fragment stream, and both streaming paths raise a named error for a
+  present-but-non-list envelope instead of discarding it. The streaming
+  detector also recognizes the envelope, so `deltas_applied` records the
+  divergence.
+- **Remove documentation for interfaces that never shipped.** Both README
+  locales and the landing-page copy told readers that "the CLI exposes the
+  following operations", but the package declares no `[project.scripts]` entry
+  point and installs no console script. The docs now state that the library
+  ships no CLI and present the bundled example as the reference usage. The
+  `client.py` comment promising `wrap(..., base_url=...)` is gone too:
+  `wrap()` takes only the client, and `base_url` belongs on the underlying
+  client.
+
+### Changed
+- Version bumped to 0.7.0 in `pyproject.toml`, `VERSION`,
+  `glm_toolbridge.__version__`, `web/site.json` `content_version`, `uv.lock`,
+  and this changelog.
+- Added the missing `[0.6.0]` link reference and a `[0.7.0]` reference.
+  `tests/test_version_consistency.py` now also asserts that the editable
+  `uv.lock` project version matches `VERSION` and that every version heading
+  has a link reference; both assertions fail on the unmodified v0.6.0 tree.
+
 ## [0.6.0] - 2026-09-22
 
 ### Fixed
@@ -172,6 +221,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`UnsupportedProtocolShape`, `MalformedToolArguments`, `StreamAssemblyError`)
   so failures are loud, never silent.
 
+[0.7.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.7.0
+[0.6.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.6.0
 [0.5.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.5.0
 [0.4.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.4.0
 [0.3.0]: https://github.com/SuperMarioYL/glm-toolbridge/releases/tag/v0.3.0
